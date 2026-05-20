@@ -6,8 +6,7 @@
 // =====================================================================
 // Config
 // =====================================================================
-const WORKER_URL = ""; // Set after Cloudflare Workers deployment (Stage 8.5)
-                       // e.g. "https://cgmiaomiao-asr.your-name.workers.dev"
+const WORKER_URL = "https://cgmiaomiao-asr.makinohara20050410.workers.dev";
 const ASR_ENDPOINT  = WORKER_URL ? `${WORKER_URL}/api/asr`  : null;
 const CHAT_ENDPOINT = WORKER_URL ? `${WORKER_URL}/api/chat` : null;
 
