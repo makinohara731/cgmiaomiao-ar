@@ -1,12 +1,11 @@
-// Simple service worker for PWA-installability and offline cache
-const CACHE_NAME = "miaomiao-v1";
+// Service worker with cache-busting strategy.
+// v2: invalidates v1, uses network-first for GLB/JS (so animation updates show immediately).
+const CACHE_NAME = "miaomiao-v2";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
-  "./main.js",
   "./manifest.json",
-  "./character_v2.glb",
   "./icon-192.png",
   "./icon-512.png"
 ];
@@ -24,9 +23,23 @@ self.addEventListener("activate", (e) => {
 });
 
 self.addEventListener("fetch", (e) => {
-  // Cache-first for same-origin GET; network for everything else (e.g. /api/*)
   if (e.request.method !== "GET") return;
   if (new URL(e.request.url).origin !== self.location.origin) return;
+
+  const url = e.request.url;
+  // Network-first for files that change often (GLB, JS, USDZ)
+  if (url.endsWith(".glb") || url.endsWith(".js") || url.endsWith(".usdz")) {
+    e.respondWith(
+      fetch(e.request).then(resp => {
+        const copy = resp.clone();
+        caches.open(CACHE_NAME).then(c => c.put(e.request, copy)).catch(() => {});
+        return resp;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Cache-first for static assets
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
       const copy = resp.clone();
