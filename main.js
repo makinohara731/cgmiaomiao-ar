@@ -61,30 +61,40 @@ function showStatus(msg, duration = 1800) {
 
 // =====================================================================
 // Animation control
+//   model-viewer is async (Lit web component). Setting animation-name then
+//   immediately calling play() races and uses the previous animation.
+//   Fix: set the ATTRIBUTE, await updateComplete, then play().
+//   Refs:
+//     - https://github.com/google/model-viewer/discussions/4525
+//     - https://github.com/google/model-viewer/issues/3144
 // =====================================================================
-function playAnim(name, options = {}) {
+async function playAnim(name, options = {}) {
   if (!modelViewer.availableAnimations.includes(name)) {
     console.warn(`Animation ${name} not in list:`, modelViewer.availableAnimations);
     return;
   }
   currentAnim = name;
-  modelViewer.animationName = name;
-  // Set loop behavior: idle/walk/run loop; attack/hurt play once
-  const loops = ["idle", "walk", "run"].includes(name);
-  modelViewer.setAttribute("autoplay", "");
+  // Set the HTML attribute (synced to property by Lit) and wait for it to apply.
+  modelViewer.setAttribute("animation-name", name);
+  await modelViewer.updateComplete;
   modelViewer.currentTime = 0;
-  if (options.then && !loops) {
-    // Schedule return to idle after one-shot anim finishes
-    const dur = (modelViewer.duration || 1.0);
-    setTimeout(() => { if (currentAnim === name) playAnim("idle"); }, dur * 1000);
-  }
+  modelViewer.play();
+
   // Update active button
   document.querySelectorAll(".anim-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.anim === name);
   });
+
   // Sound effect for one-shot animations
   if (name === "attack") playHit();
   if (name === "hurt")   playHurt();
+
+  // After one-shot animations, return to idle
+  const oneShot = ["attack", "hurt"].includes(name);
+  if (oneShot && options.then !== false) {
+    const dur = (modelViewer.duration || 1.0);
+    setTimeout(() => { if (currentAnim === name) playAnim("idle"); }, dur * 1000);
+  }
 }
 
 animBar.querySelectorAll(".anim-btn").forEach(btn => {
@@ -97,9 +107,9 @@ animBar.querySelectorAll(".anim-btn").forEach(btn => {
 
 modelViewer.addEventListener("load", () => {
   console.log("Model loaded. Available animations:", modelViewer.availableAnimations);
-  // Start with idle and let it loop
-  modelViewer.animationName = "idle";
-  modelViewer.play({repetitions: Infinity});
+  // autoplay + animation-name="idle" attributes on the <model-viewer> tag handle
+  // initial playback. We don't re-trigger play() here to avoid the async race
+  // described in google/model-viewer #4525 / #3144.
   startTwitchTimer();
 });
 

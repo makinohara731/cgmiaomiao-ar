@@ -1,6 +1,6 @@
 // Service worker with cache-busting strategy.
 // v2: invalidates v1, uses network-first for GLB/JS (so animation updates show immediately).
-const CACHE_NAME = "miaomiao-v2";
+const CACHE_NAME = "miaomiao-v3";
 const ASSETS = [
   "./",
   "./index.html",
