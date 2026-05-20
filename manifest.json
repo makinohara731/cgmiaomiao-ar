@@ -1,0 +1,25 @@
+{
+  "name": "喵喵精灵 AR",
+  "short_name": "喵喵",
+  "description": "一只活生生的 Q 版小绿猫精灵，能 AR 放进现实",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#d9f5d8",
+  "theme_color": "#5fb95e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["entertainment", "ar"]
+}

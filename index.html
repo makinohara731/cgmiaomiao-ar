@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#5fb95e">
+  <title>喵喵骨咯精灵 · AR</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+</head>
+<body>
+
+<!-- Onboarding overlay: tap-to-start enables motion permissions (iOS requires user gesture) -->
+<div id="onboard" class="overlay">
+  <div class="onboard-card">
+    <div class="logo">🐱</div>
+    <h1>喵喵精灵</h1>
+    <p>一只活生生的 Q 版小绿猫，能听你说话、跟你互动</p>
+    <ul class="hint">
+      <li>👆 拖拽 · 旋转角色</li>
+      <li>🤏 双指 · 缩放</li>
+      <li>🎤 长按麦克风 · 说"走/跑/打"</li>
+      <li>📳 摇晃手机 · 它会受惊</li>
+      <li>📷 点 AR 按钮 · 放到桌面上</li>
+    </ul>
+    <button id="startBtn" class="primary-btn">开 始 体 验</button>
+  </div>
+</div>
+
+<!-- Main scene -->
+<main id="scene">
+  <model-viewer
+    id="catModel"
+    src="character_v2.glb"
+    ios-src="character_v2.usdz"
+    alt="可爱的绿色小猫精灵"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    ar-scale="auto"
+    camera-controls
+    touch-action="pan-y"
+    auto-rotate-delay="3000"
+    interaction-prompt="none"
+    shadow-intensity="1.2"
+    shadow-softness="0.8"
+    exposure="1.0"
+    environment-image="neutral"
+    camera-orbit="0deg 75deg 2.5m"
+    field-of-view="30deg"
+    min-camera-orbit="auto auto 1.2m"
+    max-camera-orbit="auto auto 4m">
+    <button slot="ar-button" id="arBtn" class="ar-btn">
+      <span>📷</span> 放进现实
+    </button>
+
+    <!-- HUD overlay rendered inside model-viewer -->
+    <div id="speechBubble" class="speech-bubble" slot="poster" style="display:none">
+      <span id="speechText"></span>
+    </div>
+  </model-viewer>
+
+  <!-- Animation buttons (bottom) -->
+  <div id="animBar" class="anim-bar">
+    <button class="anim-btn active" data-anim="idle"  title="待机">😺<span>待机</span></button>
+    <button class="anim-btn"        data-anim="walk"  title="走">🚶<span>走路</span></button>
+    <button class="anim-btn"        data-anim="run"   title="跑">🏃<span>跑步</span></button>
+    <button class="anim-btn"        data-anim="attack" title="攻击">👊<span>攻击</span></button>
+    <button class="anim-btn"        data-anim="hurt"  title="受伤">💥<span>受伤</span></button>
+  </div>
+
+  <!-- Mic (voice) + chat (LLM) buttons (right side) -->
+  <div id="sideBar" class="side-bar">
+    <button id="micBtn" class="round-btn" title="长按说话"  aria-label="语音命令">🎤</button>
+    <button id="chatBtn" class="round-btn" title="跟猫聊天" aria-label="对话精灵">💬</button>
+    <button id="muteBtn" class="round-btn" title="静音"     aria-label="音效">🔊</button>
+  </div>
+
+  <!-- Status indicator (top) -->
+  <div id="status" class="status"></div>
+</main>
+
+<!-- Chat panel (hidden by default) -->
+<div id="chatPanel" class="chat-panel hidden">
+  <div class="chat-header">
+    <span>跟喵喵聊天</span>
+    <button id="chatClose" class="close-btn">✕</button>
+  </div>
+  <div id="chatLog" class="chat-log"></div>
+  <div class="chat-input">
+    <input id="chatInput" type="text" placeholder="说点什么...（试试：你饿吗？）" autocomplete="off">
+    <button id="chatSend">发送</button>
+  </div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
