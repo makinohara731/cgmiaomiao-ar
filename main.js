@@ -23,8 +23,6 @@ const VOICE_MAP = [
 // DOM refs
 // =====================================================================
 const $ = (sel) => document.querySelector(sel);
-const onboard   = $("#onboard");
-const startBtn  = $("#startBtn");
 const modelViewer = $("#catModel");
 const animBar   = $("#animBar");
 const micBtn    = $("#micBtn");
@@ -254,21 +252,26 @@ async function requestMotionPermission() {
 }
 
 // =====================================================================
-// Onboarding: tap "开始体验" → unlock audio + request motion
+// Lazy init: audio + motion permission on first user gesture
+//   iOS requires DeviceMotionEvent.requestPermission() from a user gesture,
+//   so we hook it to the first touch/click anywhere on the page. After that
+//   the listener removes itself.
 // =====================================================================
-startBtn.addEventListener("click", async () => {
-  ensureAudio(); // unlock Web Audio (needs user gesture)
-  const motionOK = await requestMotionPermission();
-  if (motionOK) {
-    window.addEventListener("devicemotion", handleMotion);
-    showStatus("摇晃手机试试看 📳", 2500);
-  } else {
-    showStatus("没有运动权限，摇晃功能不可用", 2000);
-  }
-  onboard.classList.add("hidden");
-  // Welcome meow
-  setTimeout(playMeow, 600);
-});
+function initOnFirstGesture() {
+  const handler = async () => {
+    document.removeEventListener("touchstart", handler);
+    document.removeEventListener("click", handler);
+    ensureAudio();
+    const ok = await requestMotionPermission();
+    if (ok) window.addEventListener("devicemotion", handleMotion);
+  };
+  document.addEventListener("touchstart", handler, { once: true });
+  document.addEventListener("click", handler, { once: true });
+}
+initOnFirstGesture();
+
+// Welcome meow once the model is in
+modelViewer.addEventListener("load", () => { setTimeout(playMeow, 800); }, { once: true });
 
 // =====================================================================
 // Voice (ASR) — long-press mic to record, release to send
