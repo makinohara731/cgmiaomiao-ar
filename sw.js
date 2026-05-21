@@ -1,6 +1,6 @@
 // Service worker with cache-busting strategy.
 // v2: invalidates v1, uses network-first for GLB/JS (so animation updates show immediately).
-const CACHE_NAME = "miaomiao-v4";
+const CACHE_NAME = "miaomiao-v5";
 const ASSETS = [
   "./",
   "./index.html",
@@ -27,8 +27,10 @@ self.addEventListener("fetch", (e) => {
   if (new URL(e.request.url).origin !== self.location.origin) return;
 
   const url = e.request.url;
-  // Network-first for files that change often (GLB, JS, USDZ)
-  if (url.endsWith(".glb") || url.endsWith(".js") || url.endsWith(".usdz")) {
+  // Network-first for navigation (HTML) and files that change often (GLB, JS, USDZ, CSS).
+  // Avoids the trap where users get stuck on an old cached index.html after deploys.
+  const isNav = e.request.mode === "navigate" || url.endsWith(".html") || url.endsWith("/");
+  if (isNav || url.endsWith(".glb") || url.endsWith(".js") || url.endsWith(".usdz") || url.endsWith(".css")) {
     e.respondWith(
       fetch(e.request).then(resp => {
         const copy = resp.clone();
