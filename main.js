@@ -177,7 +177,9 @@ function showStatus(msg, duration = 1800) {
 let emoteTimer = null;
 function emote(txt) {
   if (!txt || !emoteEl) return;
-  emoteEl.textContent = txt;
+  const art = EMOTE_ART[txt];
+  if (art) emoteEl.innerHTML = art;          // hand-drawn icon
+  else emoteEl.textContent = txt;            // fallback (e.g. an AI-chosen emoji)
   emoteEl.classList.remove("show");
   // restart the pop animation even on a back-to-back emote
   void emoteEl.offsetWidth;
@@ -190,6 +192,39 @@ const EMOTE_FOR = {
   lookaround: "❓", groom: "🧼", stretch: "🙆", sniff: "👃",
   happy: "❤️", spin: "✨", jump: "⤴️", wave: "👋",
   walk: "🐾", run: "💨", attack: "💢", hurt: "💧",
+};
+
+// ---- Hand-drawn emote icons — a cohesive custom set so the mood cues
+//      read as designed art, not a sheet of generic emoji. ----
+const _SVG = (inner) =>
+  `<svg viewBox="0 0 48 48" width="58" height="58">${inner}</svg>`;
+const _ART = {
+  heart: _SVG('<path d="M24 41C9.5 31 3 23 3 15.6 3 9 8 4.5 14 4.5c4.2 0 7.7 2.3 10 6 2.3-3.7 5.8-6 10-6 6 0 11 4.5 11 11.1C45 23 38.5 31 24 41Z" fill="#ff6f91"/><ellipse cx="14.5" cy="13.5" rx="4" ry="2.5" fill="#fff" opacity=".55" transform="rotate(-38 14.5 13.5)"/>'),
+  spark: _SVG('<path d="M27 3c1.1 9.7 4.3 12.9 14 14-9.7 1.1-12.9 4.3-14 14-1.1-9.7-4.3-12.9-14-14 9.7-1.1 12.9-4.3 14-14Z" fill="#ffd23f"/><path d="M12 27c.6 5 2 6.4 7 7-5 .6-6.4 2-7 7-.6-5-2-6.4-7-7 5-.6 6.4-2 7-7Z" fill="#ffe480"/>'),
+  note: _SVG('<ellipse cx="16" cy="35" rx="9.5" ry="7.5" fill="#5fb95e"/><rect x="22.5" y="7" width="4.2" height="30" fill="#5fb95e"/><path d="M26.7 7c8.5 2.2 11.6 7.4 9.3 15.6 1.4-6.4-3.3-9.6-9.3-10.6Z" fill="#4a9e4a"/>'),
+  moon: _SVG('<path d="M33 5a19 19 0 1 0 11.5 33.5A15 15 0 0 1 33 5Z" fill="#f6c945"/><circle cx="30" cy="14" r="2.4" fill="#fff" opacity=".6"/><circle cx="37" cy="22" r="1.6" fill="#fff" opacity=".5"/>'),
+  think: _SVG('<g fill="#eef3f0"><circle cx="19" cy="21" r="10.5"/><circle cx="32" cy="17" r="8.8"/><circle cx="34" cy="28" r="8.2"/><circle cx="23" cy="30" r="8.5"/></g><circle cx="13" cy="38" r="3.6" fill="#eef3f0"/><circle cx="7.5" cy="43.5" r="2.3" fill="#eef3f0"/>'),
+  question: _SVG('<circle cx="24" cy="24" r="21" fill="#5fb95e"/><text x="24" y="35.5" font-size="31" font-weight="800" text-anchor="middle" fill="#fff" font-family="-apple-system,Segoe UI,sans-serif">?</text>'),
+  fish: _SVG('<path d="M31 24c0-7.2-7.2-12.5-15.5-12.5-5.2 0-9.6 2-12.5 5.2 2 3 3 5.1 3 7.3s-1 4.3-3 7.3c2.9 3.2 7.3 5.2 12.5 5.2C23.8 36.5 31 31.2 31 24Z" fill="#ff9a52"/><path d="M31 24 45 14.5v19Z" fill="#ff9a52"/><circle cx="13" cy="20.5" r="2.6" fill="#fff"/><circle cx="13" cy="20.5" r="1.2" fill="#3a2a1a"/>'),
+  tear: _SVG('<path d="M24 5C24 5 39 27 39 34.5a15 15 0 0 1-30 0C9 27 24 5 24 5Z" fill="#5ab3f0"/><ellipse cx="18" cy="30" rx="3" ry="5.2" fill="#fff" opacity=".5"/>'),
+  sun: _SVG('<g stroke="#f6c945" stroke-width="4.2" stroke-linecap="round"><path d="M24 3v6.5M24 38.5V45M3 24h6.5M38.5 24H45M9 9l4.6 4.6M34.4 34.4 39 39M39 9l-4.6 4.6M13.6 34.4 9 39"/></g><circle cx="24" cy="24" r="11" fill="#ffd23f"/>'),
+  paw: _SVG('<g fill="#ff8fab"><ellipse cx="24" cy="33" rx="11.5" ry="9.5"/><ellipse cx="10.5" cy="20" rx="5" ry="6.6"/><ellipse cx="19.5" cy="12.5" rx="5" ry="6.8"/><ellipse cx="28.5" cy="12.5" rx="5" ry="6.8"/><ellipse cx="37.5" cy="20" rx="5" ry="6.6"/></g>'),
+  exclaim: _SVG('<circle cx="24" cy="24" r="21" fill="#ff8a3d"/><text x="24" y="35.5" font-size="31" font-weight="800" text-anchor="middle" fill="#fff" font-family="-apple-system,Segoe UI,sans-serif">!</text>'),
+  dizzy: _SVG('<path d="M24 24c0-3.2 2.6-5.4 5.8-5.4 5.2 0 9.2 4.2 9.2 9.8 0 8-7 14.4-15.6 14.4C13 42.8 5 34.6 5 24 5 12 14.4 3 26.4 3c8.4 0 15.6 5 19 12.4" fill="none" stroke="#b98fe0" stroke-width="4.2" stroke-linecap="round"/>'),
+};
+const EMOTE_ART = {
+  "❤️": _ART.heart, "💕": _ART.heart, "🥺": _ART.heart, "🎈": _ART.heart,
+  "✨": _ART.spark, "🧼": _ART.spark, "⤴️": _ART.spark, "💨": _ART.spark, "🙆": _ART.spark,
+  "♪": _ART.note, "🌸": _ART.note, "🌿": _ART.note,
+  "💤": _ART.moon, "🥱": _ART.moon,
+  "💭": _ART.think,
+  "❓": _ART.question, "👃": _ART.question,
+  "🍖": _ART.fish, "🐟": _ART.fish, "🍽️": _ART.fish,
+  "😿": _ART.tear, "💧": _ART.tear,
+  "💫": _ART.dizzy, "💢": _ART.dizzy,
+  "🌞": _ART.sun,
+  "❗": _ART.exclaim,
+  "👋": _ART.paw, "🐾": _ART.paw,
 };
 
 // =====================================================================
@@ -1152,6 +1187,7 @@ async function enterCamMode() {
   bumpInteract();
   emote("✨");
   sayLine(pickFrom(["喵～带我看看你那边！", "哇，这是哪里呀？", "嘿嘿，我出来啦！"]));
+  initVision().then(() => { if (camMode) startVisionLoop(); });
 }
 
 function exitCamMode() {
@@ -1159,6 +1195,8 @@ function exitCamMode() {
   document.body.classList.remove("cam-mode");
   if (camBtn) { camBtn.textContent = "📸"; camBtn.classList.remove("active"); }
   modelViewer.setAttribute("shadow-intensity", "0.55");
+  if (visionRAF) { cancelAnimationFrame(visionRAF); visionRAF = null; }
+  lastGestureName = "";
   if (camStream) {
     camStream.getTracks().forEach((t) => t.stop());
     camStream = null;
@@ -1172,6 +1210,130 @@ if (camBtn && camFeed) {
   });
 }
 window.addEventListener("pagehide", () => { if (camMode) exitCamMode(); });
+
+// =====================================================================
+// Camera vision — hand gestures + facial expression. While the camera
+// is open, MediaPipe reads the live feed and the sprite reacts to your
+// waves, thumbs-up, victory signs and smiles. Loaded lazily on the
+// first camera session so it never costs anything until used.
+// =====================================================================
+let gestureRecognizer = null;
+let faceLandmarker = null;
+let visionLoading = false;
+let visionReady = false;
+let visionRAF = null;
+let lastVisionAt = 0;
+let visionTick = 0;
+let lastGestureName = "";
+let visionCooldownUntil = 0;
+
+const GESTURE_REACTION = {
+  Open_Palm:   { anim: "wave",       emote: "👋", line: "你好呀～我也跟你招手！" },
+  Thumb_Up:    { anim: "happy",      emote: "❤️", line: "嘿嘿，被你夸啦，好开心！", aff: 2 },
+  Victory:     { anim: "twirl",      emote: "✨", line: "耶～看我转个圈圈！",        aff: 1 },
+  Closed_Fist: { anim: "jump",       emote: "⤴️", line: "出拳？那我蹦一个给你看！" },
+  Pointing_Up: { anim: "lookaround", emote: "❓", line: "嗯？那边有什么吗喵～" },
+  ILoveYou:    { anim: "happy",      emote: "❤️", line: "我也最爱你啦！呼噜呼噜～",  aff: 3 },
+};
+
+async function initVision() {
+  if (visionReady || visionLoading) return;
+  visionLoading = true;
+  try {
+    const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision");
+    const { GestureRecognizer, FaceLandmarker, FilesetResolver } = vision;
+    const files = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm");
+    gestureRecognizer = await GestureRecognizer.createFromOptions(files, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO", numHands: 1,
+    });
+    faceLandmarker = await FaceLandmarker.createFromOptions(files, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true,
+    });
+    visionReady = true;
+    showStatus("手势 + 表情识别已开启 ✨", 2600);
+  } catch (e) {
+    console.warn("vision init failed:", e);
+    showStatus("手势识别没能加载，仍可正常互动", 2800);
+  }
+  visionLoading = false;
+}
+
+function startVisionLoop() {
+  if (!visionReady || visionRAF) return;
+  const loop = () => {
+    if (!camMode) { visionRAF = null; return; }
+    visionRAF = requestAnimationFrame(loop);
+    const now = performance.now();
+    if (now - lastVisionAt < 130) return;        // throttle to ~7-8 fps
+    lastVisionAt = now;
+    if (!camFeed || camFeed.readyState < 2) return;
+    visionTick++;
+    try {
+      if (visionTick % 2 === 0) {
+        handleGestures(gestureRecognizer.recognizeForVideo(camFeed, now));
+      } else {
+        handleFace(faceLandmarker.detectForVideo(camFeed, now));
+      }
+    } catch (_) { /* a dropped frame — ignore */ }
+  };
+  visionRAF = requestAnimationFrame(loop);
+}
+
+// React to a recognised hand gesture (debounced: hold-and-release).
+function handleGestures(result) {
+  if (!result || !result.gestures || !result.gestures.length) {
+    lastGestureName = "";
+    return;
+  }
+  const top = result.gestures[0][0];
+  if (!top || top.categoryName === "None" || top.score < 0.55) {
+    lastGestureName = "";
+    return;
+  }
+  const name = top.categoryName;
+  if (name === lastGestureName) return;          // same gesture still held
+  lastGestureName = name;
+  if (Date.now() < visionCooldownUntil) return;
+  const r = GESTURE_REACTION[name];
+  if (!r) return;
+  visionCooldownUntil = Date.now() + 3000;
+  life.busyUntil = Date.now() + 2200;
+  life.lastInteract = Date.now();
+  if (r.aff) addAffection(r.aff);
+  emote(r.emote);
+  playAnim(r.anim);
+  sayLine(r.line);
+}
+
+// React to a smile (face blendshapes).
+function handleFace(result) {
+  if (!result || !result.faceBlendshapes || !result.faceBlendshapes.length) return;
+  let smile = 0;
+  for (const c of result.faceBlendshapes[0].categories) {
+    if (c.categoryName === "mouthSmileLeft" || c.categoryName === "mouthSmileRight") {
+      smile = Math.max(smile, c.score);
+    }
+  }
+  if (smile > 0.45 && Date.now() >= visionCooldownUntil) {
+    visionCooldownUntil = Date.now() + 5000;
+    life.busyUntil = Date.now() + 2000;
+    life.lastInteract = Date.now();
+    addAffection(1.5);
+    life.mood = clamp01(life.mood + 0.12);
+    emote("❤️");
+    playAnim("happy");
+    sayLine(pickFrom(["你笑起来真好看喵～", "看到你笑我也好开心！", "嘿嘿，对着我笑啦～"]));
+  }
+}
 
 // =====================================================================
 // Voice (ASR) — long-press mic to record, release to send
