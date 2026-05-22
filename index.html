@@ -29,7 +29,7 @@
       <li>👆 点一点屏幕 —— 摸摸它，连点会更亲昵</li>
       <li>🎤 长按麦克风 —— 跟它说话、下指令</li>
       <li>📱 摇一摇手机 —— 看它的反应</li>
-      <li>📷 「放进现实」 —— 把它带到你身边</li>
+      <li>📸 点右侧相机 —— 让喵喵出现在你的镜头里</li>
     </ul>
     <button id="onboardStart" class="primary-btn">开始玩 →</button>
   </div>
@@ -37,6 +37,9 @@
 
 <!-- Main scene -->
 <main id="scene">
+  <!-- Camera passthrough — live feed sits behind the transparent 3D scene -->
+  <video id="camFeed" playsinline muted autoplay></video>
+
   <model-viewer
     id="catModel"
     src="character_v2.glb"
@@ -82,6 +85,7 @@
 
   <!-- Mic (voice) + chat (LLM) buttons (right side) -->
   <div id="sideBar" class="side-bar">
+    <button id="camBtn" class="round-btn" title="AR互动模式" aria-label="AR互动模式">📸</button>
     <button id="micBtn" class="round-btn" title="长按说话"  aria-label="语音命令">🎤</button>
     <button id="chatBtn" class="round-btn" title="跟猫聊天" aria-label="对话精灵">💬</button>
     <button id="muteBtn" class="round-btn" title="静音"     aria-label="音效">🔊</button>

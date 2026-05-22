@@ -76,6 +76,8 @@ const sayTextEl    = $("#sayText");
 const qrBtn   = $("#qrBtn");
 const qrModal = $("#qrModal");
 const qrClose = $("#qrClose");
+const camBtn  = $("#camBtn");
+const camFeed = $("#camFeed");
 
 // =====================================================================
 // Life state — the heart of the "motion ecology"
@@ -838,6 +840,60 @@ if (qrModal) {
     if (e.target === qrModal) qrModal.classList.add("hidden");
   });
 }
+
+// =====================================================================
+// AR interaction mode — camera passthrough. The live rear-camera feed
+// sits behind the transparent 3D scene, so the sprite appears in the
+// real world while every web interaction (tap, AI chat, voice, the
+// whole behaviour engine) keeps running — unlike the native AR viewers,
+// which can only replay baked clips.
+// =====================================================================
+let camStream = null;
+let camMode = false;
+
+async function enterCamMode() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showStatus("此设备不支持摄像头", 2400);
+    return;
+  }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } }, audio: false,
+    });
+  } catch (e) {
+    showStatus("打不开摄像头，请允许相机权限", 2800);
+    return;
+  }
+  camFeed.srcObject = camStream;
+  try { await camFeed.play(); } catch (_) {}
+  camMode = true;
+  document.body.classList.add("cam-mode");
+  camBtn.textContent = "✕";
+  camBtn.classList.add("active");
+  modelViewer.setAttribute("shadow-intensity", "0");   // a floating spirit — skip the fake ground shadow
+  bumpInteract();
+  emote("✨");
+  sayLine(pickFrom(["喵～带我看看你那边！", "哇，这是哪里呀？", "嘿嘿，我出来啦！"]));
+}
+
+function exitCamMode() {
+  camMode = false;
+  document.body.classList.remove("cam-mode");
+  if (camBtn) { camBtn.textContent = "📸"; camBtn.classList.remove("active"); }
+  modelViewer.setAttribute("shadow-intensity", "0.55");
+  if (camStream) {
+    camStream.getTracks().forEach((t) => t.stop());
+    camStream = null;
+  }
+  if (camFeed) camFeed.srcObject = null;
+}
+
+if (camBtn && camFeed) {
+  camBtn.addEventListener("click", () => {
+    if (camMode) exitCamMode(); else enterCamMode();
+  });
+}
+window.addEventListener("pagehide", () => { if (camMode) exitCamMode(); });
 
 // =====================================================================
 // Voice (ASR) — long-press mic to record, release to send

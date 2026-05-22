@@ -61,7 +61,21 @@ model-viewer {
   width: 100%; height: 100%;
   background: transparent;
   --poster-color: transparent;
+  position: relative; z-index: 1;
 }
+
+/* === Camera passthrough (AR interaction mode) === */
+#camFeed {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  background: #000;
+  z-index: 0;
+  display: none;
+}
+body.cam-mode #camFeed { display: block; }
+/* drop the soft page gradient while the camera shows through */
+body.cam-mode { background: #000; }
 
 /* === AR launch button === */
 .ar-btn {
