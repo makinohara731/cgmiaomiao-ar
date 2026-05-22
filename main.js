@@ -79,7 +79,7 @@ async function playAnim(name, options = {}) {
   // play() with no options plays the clip exactly ONCE. Cyclic clips
   // (idle/walk/run) must loop explicitly via repetitions:Infinity; one-shot
   // clips (attack/hurt) play once and the timer below returns to idle.
-  const isOneShot = ["attack", "hurt"].includes(name);
+  const isOneShot = ["attack", "hurt", "wave", "happy", "jump", "spin", "backflip", "twirl"].includes(name);
   modelViewer.play({ repetitions: isOneShot ? 1 : Infinity });
 
   // Update active button
@@ -92,7 +92,7 @@ async function playAnim(name, options = {}) {
   if (name === "hurt")   playHurt();
 
   // After one-shot animations, return to idle
-  const oneShot = ["attack", "hurt"].includes(name);
+  const oneShot = ["attack", "hurt", "wave", "happy", "jump", "spin", "backflip", "twirl"].includes(name);
   if (oneShot && options.then !== false) {
     const dur = (modelViewer.duration || 1.0);
     setTimeout(() => { if (currentAnim === name) playAnim("idle"); }, dur * 1000);
@@ -102,7 +102,7 @@ async function playAnim(name, options = {}) {
 animBar.querySelectorAll(".anim-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const anim = btn.dataset.anim;
-    const oneShot = ["attack", "hurt"].includes(anim);
+    const oneShot = ["attack", "hurt", "wave", "happy", "jump", "spin", "backflip", "twirl"].includes(anim);
     playAnim(anim, { then: oneShot });
   });
 });
@@ -351,7 +351,7 @@ async function sendToASR(blob) {
 function handleVoiceCommand(text) {
   for (const { kw, anim } of VOICE_MAP) {
     if (kw.test(text)) {
-      const oneShot = ["attack", "hurt"].includes(anim);
+      const oneShot = ["attack", "hurt", "wave", "happy", "jump", "spin", "backflip", "twirl"].includes(anim);
       playAnim(anim, { then: oneShot });
       return true;
     }
