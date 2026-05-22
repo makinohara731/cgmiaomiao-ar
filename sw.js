@@ -1,6 +1,6 @@
 // Service worker with cache-busting strategy.
 // v2: invalidates v1, uses network-first for GLB/JS (so animation updates show immediately).
-const CACHE_NAME = "miaomiao-v5";
+const CACHE_NAME = "miaomiao-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -31,8 +31,10 @@ self.addEventListener("fetch", (e) => {
   // Avoids the trap where users get stuck on an old cached index.html after deploys.
   const isNav = e.request.mode === "navigate" || url.endsWith(".html") || url.endsWith("/");
   if (isNav || url.endsWith(".glb") || url.endsWith(".js") || url.endsWith(".usdz") || url.endsWith(".css")) {
+    // cache:"reload" bypasses the browser HTTP cache so a deploy is never
+    // masked by a stale GLB/JS still sitting in the disk cache.
     e.respondWith(
-      fetch(e.request).then(resp => {
+      fetch(e.request, { cache: "reload" }).then(resp => {
         const copy = resp.clone();
         caches.open(CACHE_NAME).then(c => c.put(e.request, copy)).catch(() => {});
         return resp;
