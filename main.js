@@ -76,7 +76,11 @@ async function playAnim(name, options = {}) {
   modelViewer.setAttribute("animation-name", name);
   await modelViewer.updateComplete;
   modelViewer.currentTime = 0;
-  modelViewer.play();
+  // play() with no options plays the clip exactly ONCE. Cyclic clips
+  // (idle/walk/run) must loop explicitly via repetitions:Infinity; one-shot
+  // clips (attack/hurt) play once and the timer below returns to idle.
+  const isOneShot = ["attack", "hurt"].includes(name);
+  modelViewer.play({ repetitions: isOneShot ? 1 : Infinity });
 
   // Update active button
   document.querySelectorAll(".anim-btn").forEach(b => {
@@ -108,6 +112,20 @@ modelViewer.addEventListener("load", () => {
   // autoplay + animation-name="idle" attributes on the <model-viewer> tag handle
   // initial playback. We don't re-trigger play() here to avoid the async race
   // described in google/model-viewer #4525 / #3144.
+
+  // Matte override DISABLED for PBR GLB test — the new model ships with its
+  // own normal map + metallic/roughness textures, and overriding them
+  // (rough=1, metallic=0) destroys the PBR effect we're trying to see.
+  // Re-enable this block when going back to the rigged Tripo GLB.
+  // try {
+  //   for (const m of modelViewer.model.materials) {
+  //     const pbr = m.pbrMetallicRoughness;
+  //     pbr.setRoughnessFactor(1.0);
+  //     pbr.setMetallicFactor(0.0);
+  //   }
+  //   console.log("Materials forced to matte (roughness=1, metallic=0)");
+  // } catch (e) { console.warn("material override failed:", e); }
+
   startTwitchTimer();
 });
 
