@@ -28,7 +28,7 @@ const CLIPS = {
   happy:{loop:false},    jump:{loop:false},   spin:{loop:false},
   backflip:{loop:false}, twirl:{loop:false},
   lookaround:{loop:false}, groom:{loop:false},
-  stretch:{loop:false},    sniff:{loop:false},
+  stretch:{loop:false},    sniff:{loop:false},   eat:{loop:false},
 };
 const isLoopClip = (n) => !!(CLIPS[n] && CLIPS[n].loop);
 
@@ -78,19 +78,29 @@ const qrModal = $("#qrModal");
 const qrClose = $("#qrClose");
 const camBtn  = $("#camBtn");
 const camFeed = $("#camFeed");
+const feedBtn       = $("#feedBtn");
+const bondChipEl    = $("#bondChip");
+const bondStageEl   = $("#bondStage");
+const statusPanelEl = $("#statusPanel");
+const spCloseBtn    = $("#spClose");
+const choicesEl     = $("#choices");
 
 // =====================================================================
 // Life state — the heart of the "motion ecology"
 // =====================================================================
 const life = {
-  energy: 0.85,        // 0..1 — drains while ignored, restored by interaction
-  mood:   0.65,        // 0..1 — affection; high mood unlocks playful reactions
+  energy: 0.85,        // 0..1 — drains while ignored, restored by rest/care
+  mood:   0.65,        // 0..1 — drains when bored, restored by play/affection
+  hunger: 0.8,         // 0..1 — 1 is full; drains over time, restored by feeding
   asleep: false,       // dozing — base loop becomes "sleep"
   busyUntil: 0,        // suppresses autonomous behaviour after a user action
   lastInteract: Date.now(),
   petStreak: 0,        // consecutive taps inside the streak window
   petTimer: null,
   totalPets: 0,        // lifetime tap count (persisted)
+  affection: 0,        // 0..100 — the bond meter; defines the relationship stage
+  bornAt: Date.now(),  // first-met timestamp (for "days together")
+  seenEvents: [],      // bond-event ids already played
 };
 
 let currentAnim   = "idle";
@@ -123,8 +133,10 @@ const LIFE_KEY = "miaomiao.life.v1";
 function saveLife() {
   try {
     localStorage.setItem(LIFE_KEY, JSON.stringify({
-      energy: life.energy, mood: life.mood, asleep: life.asleep,
-      totalPets: life.totalPets, savedAt: Date.now(),
+      energy: life.energy, mood: life.mood, hunger: life.hunger,
+      asleep: life.asleep, totalPets: life.totalPets,
+      affection: life.affection, bornAt: life.bornAt,
+      seenEvents: life.seenEvents, savedAt: Date.now(),
     }));
   } catch (_) { /* storage unavailable — run stateless */ }
 }
@@ -136,12 +148,17 @@ function loadLife() {
   life.totalPets = saved.totalPets || 0;
   life.energy = clamp01(saved.energy != null ? saved.energy : 0.85);
   life.mood   = clamp01(saved.mood   != null ? saved.mood   : 0.65);
+  life.hunger = clamp01(saved.hunger != null ? saved.hunger : 0.8);
   life.asleep = !!saved.asleep;
+  life.affection  = Math.max(0, Math.min(100, saved.affection || 0));
+  life.bornAt     = saved.bornAt || Date.now();
+  life.seenEvents = Array.isArray(saved.seenEvents) ? saved.seenEvents : [];
 
   const hoursAway = Math.max(0, (Date.now() - (saved.savedAt || Date.now())) / 3600000);
   if (hoursAway > 0.05) {
     life.mood   = clamp01(life.mood   - hoursAway * 0.05);   // misses you a bit
     life.energy = clamp01(life.energy + hoursAway * 0.12);   // but rests up
+    life.hunger = clamp01(life.hunger - hoursAway * 0.16);   // and gets hungry
     if (hoursAway > 2) life.asleep = true;                   // dozed off waiting
   }
 }
@@ -243,6 +260,8 @@ function bumpInteract(amount = 1) {
   life.lastInteract = Date.now();
   life.mood   = clamp01(life.mood   + 0.12 * amount);
   life.energy = clamp01(life.energy + 0.10 * amount);
+  addAffection(0.3 * amount);
+  refreshHud();
 }
 
 // =====================================================================
@@ -269,28 +288,41 @@ function runBehavior() {
   if (currentAnim !== baseAnim()) return;
 
   if (life.asleep) {
-    life.energy = clamp01(life.energy + 0.045);   // resting recharges
+    life.energy = clamp01(life.energy + 0.05);    // resting recharges
+    life.hunger = clamp01(life.hunger - 0.012);   // still gets a little hungry
+    refreshHud();
     if (Math.random() < 0.45) emote("💤");
     return;
   }
 
-  // awake: slow drift of energy/mood between behaviours
-  life.energy = clamp01(life.energy - 0.035);
-  life.mood   = clamp01(life.mood   - 0.022);
+  // awake: needs drift down between behaviours
+  life.hunger = clamp01(life.hunger - 0.024);
+  life.energy = clamp01(life.energy - 0.03);
+  life.mood   = clamp01(life.mood   - 0.02);
+  if (life.hunger < 0.1) addAffection(-0.5);      // letting it starve hurts the bond
+  refreshHud();
 
-  // run-down + ignored for a while → doze off
-  if (life.energy < 0.24 && now - life.lastInteract > 20000) {
+  // energy crash → doze off
+  if (life.energy < 0.22 && now - life.lastInteract > 18000) {
     fallAsleep();
     return;
   }
 
-  // pick an ambient behaviour weighted by current state
+  // a low need overrides ambient life — the cat actively seeks care
+  const need = lowestNeed();
+  if (need) { seekCare(need); return; }
+
+  // ambient: a spontaneous thought, a question, or an idle micro-action
+  const roll = Math.random();
+  if (roll < 0.24) { spontaneousThought(); return; }
+  if (roll < 0.32 && life.affection >= 8 && now - lastQuestionAt > 50000) {
+    askQuestion();
+    return;
+  }
+
   const pool = [
-    ["lookaround", 30],
-    ["groom",      22],
-    ["sniff",      16],
-    ["stretch",    12],
-    ["nothing",    12],
+    ["lookaround", 28], ["groom", 20], ["sniff", 15],
+    ["stretch", 11], ["nothing", 11],
   ];
   if (life.mood > 0.62 && life.energy > 0.5) pool.push(["happy", 12], ["spin", 6]);
   if (life.energy > 0.72)                    pool.push(["jump", 6]);
@@ -329,6 +361,251 @@ function wakeUp(startled) {
   } else {
     emote("🌞"); playChirp(); playAnim("stretch");
   }
+}
+
+// =====================================================================
+// 养成系统 (raising & bond system) — needs, affection, the cat's own
+// initiative, dialogue choices and milestone story events. This is what
+// turns the sprite from "a thing that reacts" into "a creature you raise".
+// =====================================================================
+
+// ---- Relationship stages, keyed by affection (0..100) ----
+const STAGES = [
+  { name: "初遇",     min: 0  },
+  { name: "熟悉",     min: 15 },
+  { name: "亲近",     min: 35 },
+  { name: "黏人",     min: 60 },
+  { name: "形影不离", min: 85 },
+];
+function stageOf(a) {
+  let s = STAGES[0];
+  for (const x of STAGES) if (a >= x.min) s = x;
+  return s;
+}
+
+function addAffection(delta) {
+  const before = stageOf(life.affection).name;
+  life.affection = Math.max(0, Math.min(100, life.affection + delta));
+  const after = stageOf(life.affection);
+  if (delta > 0 && after.name !== before) triggerBondEvent(after);
+  refreshHud();
+}
+
+// ---- HUD: the top-left bond chip + (when open) the status panel ----
+function refreshHud() {
+  if (bondStageEl) bondStageEl.textContent = stageOf(life.affection).name;
+  if (bondChipEl) bondChipEl.style.setProperty("--aff", String(life.affection / 100));
+  if (statusPanelEl && !statusPanelEl.classList.contains("hidden")) renderStatusPanel();
+}
+
+// ---- Needs: which need most wants care right now ----
+function lowestNeed() {
+  if (life.hunger < 0.28) return "hunger";
+  if (life.mood   < 0.30) return "mood";
+  if (life.energy < 0.36) return "energy";
+  return null;
+}
+
+// The cat actively seeks care for a low need — it comes over, acts it
+// out and asks out loud, nagging each cycle until the need is met.
+function seekCare(need) {
+  if (need === "hunger") {
+    emote(pickFrom(["🍖", "😿", "🍽️"]));
+    sayLine(pickFrom([
+      "肚子饿扁了喵…喂我点东西好不好",
+      "喵呜～我好想吃东西…",
+      "你看我可怜兮兮的，是不是该喂我啦？",
+    ]));
+    playAnim(pickFrom(["sniff", "lookaround", "walk"]));
+    life.mood = clamp01(life.mood - 0.02);
+  } else if (need === "mood") {
+    emote(pickFrom(["🎈", "🥺", "✨"]));
+    sayLine(pickFrom([
+      "好无聊呀…陪我玩一会儿嘛",
+      "喵～你都不理我，哼！",
+      "我们来玩点什么好不好？",
+    ]));
+    playAnim(pickFrom(["happy", "jump", "spin"]));
+  } else if (need === "energy") {
+    emote("🥱");
+    sayLine(pickFrom(["唔…有点困了喵", "好想眯一小会儿…"]));
+    playAnim("stretch");
+  }
+  refreshHud();
+}
+
+// ---- The cat's own passing thoughts — they shift with the bond stage ----
+const THOUGHTS = {
+  初遇:     ["喵？你是谁呀…", "这里是哪里呢～", "嗯…要不要相信你呢", "（小心地打量着你）"],
+  熟悉:     ["今天也见到你了，喵～", "你身上的味道我记住啦", "陪着你感觉还不错", "在想等会儿玩什么呢"],
+  亲近:     ["和你在一起好安心呀", "诶嘿，又是你～", "我有点点想你了…", "今天也要一起玩哦"],
+  黏人:     ["最喜欢你待在我身边了", "你不许走开太久哦！", "想一直一直黏着你～", "呼噜呼噜…好幸福"],
+  形影不离: ["你就是我最重要的人啦", "我们会一直在一起对吧？", "有你在，哪里都是家", "（满足地蹭了蹭你）"],
+};
+function spontaneousThought() {
+  const pool = THOUGHTS[stageOf(life.affection).name] || THOUGHTS["初遇"];
+  emote(pickFrom(["💭", "～", "·ω·", "🌸"]));
+  sayLine(pickFrom(pool));
+  if (Math.random() < 0.5) playAnim(pickFrom(["lookaround", "groom"]));
+}
+
+// ---- Dialogue choices — the cat asks, you pick, the bond shifts ----
+let lastQuestionAt = 0;
+let questionTimer = null;
+
+const QUESTIONS = [
+  { q: "今天…你是特意来看我的吗？", opts: [
+    { t: "当然啦",   aff: 4,  anim: "happy",      reply: "嘿嘿…我就知道！最喜欢你了喵～" },
+    { t: "顺便而已", aff: -1, anim: "hurt",       reply: "唔…顺便也好啦…（小声）" }] },
+  { q: "喵～你喜欢现在的我吗？", opts: [
+    { t: "超级喜欢", aff: 4, anim: "spin",        reply: "呀！我也是我也是！转个圈给你看～" },
+    { t: "还行吧",   aff: 0, anim: "lookaround",  reply: "还行…那我要更努力让你喜欢我！" }] },
+  { q: "如果我饿了，你会第一时间喂我吗？", opts: [
+    { t: "马上喂你", aff: 3,  anim: "happy",      reply: "呼噜～有你这句话我就放心啦" },
+    { t: "看心情",   aff: -1, anim: "sniff",      reply: "喵…那我得多撒娇才行了" }] },
+  { q: "你今天过得开心吗？说给我听听～", opts: [
+    { t: "和你说说", aff: 3, anim: "lookaround",  reply: "嗯嗯，我都听着呢，喵～" },
+    { t: "保密",     aff: 1, anim: "groom",       reply: "哼，小气！那我自己玩啦" }] },
+  { q: "我们…会一直在一起对不对？", opts: [
+    { t: "会一直在", aff: 5,  anim: "happy",      reply: "太好啦！那我要赖着你一辈子喵～" },
+    { t: "谁知道呢", aff: -2, anim: "hurt",       reply: "…别这样说嘛，我会难过的" }] },
+  { q: "想不想看我表演个绝技？", opts: [
+    { t: "快表演！", aff: 3, anim: "backflip",    reply: "看好咯——喵嗷！" },
+    { t: "下次吧",   aff: 0, anim: "idle",        reply: "好吧…那你可要记得哦" }] },
+];
+
+function askQuestion() {
+  if (!choicesEl) return;
+  lastQuestionAt = Date.now();
+  const q = pickFrom(QUESTIONS);
+  emote("❓");
+  sayLine(q.q);
+  life.busyUntil = Date.now() + 60000;          // hold while waiting for the player
+  choicesEl.innerHTML = "";
+  q.opts.forEach((opt) => {
+    const b = document.createElement("button");
+    b.className = "choice-btn";
+    b.textContent = opt.t;
+    b.addEventListener("click", () => answerQuestion(opt), { once: true });
+    choicesEl.appendChild(b);
+  });
+  choicesEl.classList.remove("hidden");
+  clearTimeout(questionTimer);
+  questionTimer = setTimeout(() => {            // ignored for too long
+    if (choicesEl.classList.contains("hidden")) return;
+    choicesEl.classList.add("hidden");
+    choicesEl.innerHTML = "";
+    life.busyUntil = Date.now() + 500;
+    emote("…");
+    sayLine("…你不理我，哼。");
+    addAffection(-1);
+  }, 22000);
+}
+
+function answerQuestion(opt) {
+  clearTimeout(questionTimer);
+  choicesEl.classList.add("hidden");
+  choicesEl.innerHTML = "";
+  life.busyUntil = Date.now() + 2000;
+  life.lastInteract = Date.now();
+  addAffection(opt.aff);
+  if (opt.aff > 0) life.mood = clamp01(life.mood + 0.1);
+  emote(opt.aff > 0 ? "❤️" : (opt.aff < 0 ? "💧" : "·ω·"));
+  if (opt.anim && (modelViewer.availableAnimations || []).includes(opt.anim)) {
+    playAnim(opt.anim);
+  }
+  sayLine(opt.reply);
+}
+
+// ---- Bond events — a special scripted moment at each new stage ----
+const BOND_EVENTS = {
+  熟悉: { anim: "wave", lines: [
+    "唔…我好像，开始习惯有你了。",
+    "以后…要常来看我哦，喵～"] },
+  亲近: { anim: "happy", lines: [
+    "和你在一起的时候，我最安心了。",
+    "我决定啦——要一直黏着你！",
+    "（轻轻蹭了蹭你的手）"] },
+  黏人: { anim: "spin", lines: [
+    "你不在的时候…我会偷偷想你的。",
+    "好想把全世界最好的都给你呀～",
+    "答应我，不要丢下我哦。"] },
+  形影不离: { anim: "twirl", lines: [
+    "从今天起，我和你就是一家人了。",
+    "无论你去哪里，我的心都跟着你。",
+    "谢谢你…一直一直陪着我。喵～"] },
+};
+
+function triggerBondEvent(stage) {
+  const ev = BOND_EVENTS[stage.name];
+  if (!ev || life.seenEvents.includes(stage.name)) return;
+  life.seenEvents.push(stage.name);
+  saveLife();
+  life.busyUntil = Date.now() + ev.lines.length * 3400 + 2000;
+  showStatus(`✨ 羁绊加深 —— ${stage.name}`, 4200);
+  if (ev.anim && (modelViewer.availableAnimations || []).includes(ev.anim)) {
+    playAnim(ev.anim);
+  }
+  let i = 0;
+  const next = () => {
+    if (i >= ev.lines.length) return;
+    sayLine(ev.lines[i]);
+    emote(i === ev.lines.length - 1 ? "❤️" : "✨");
+    i++;
+    setTimeout(next, 3400);
+  };
+  next();
+}
+
+// ---- Feeding ----
+function feedCat() {
+  if (life.asleep) wakeUp(false);
+  bumpInteract();
+  const wasHungry = life.hunger < 0.45;
+  life.hunger = clamp01(life.hunger + 0.5);
+  life.mood   = clamp01(life.mood + 0.12);
+  addAffection(wasHungry ? 4 : 1.5);
+  life.busyUntil = Date.now() + 2400;
+  emote("🐟");
+  playAnim("eat");
+  setTimeout(() => sayLine(pickFrom(wasHungry
+    ? ["呜哇～太好吃了！谢谢你喵～", "嗯嗯！这个我最喜欢了！", "吃饱饱～最喜欢你了！"]
+    : ["喵～虽然不太饿，还是谢谢你！", "嗯…再吃一点点也可以啦", "你对我真好喵～"])), 800);
+  refreshHud();
+}
+
+// ---- Status panel — a GalGame-style character sheet ----
+function renderStatusPanel() {
+  if (!statusPanelEl) return;
+  const days = Math.floor((Date.now() - life.bornAt) / 86400000) + 1;
+  const setBar = (id, frac) => {
+    const el = document.getElementById(id);
+    if (el) el.style.width = Math.round(clamp01(frac) * 100) + "%";
+  };
+  const setTxt = (id, s) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = s;
+  };
+  setTxt("spStage", stageOf(life.affection).name);
+  setBar("spAff", life.affection / 100);
+  setTxt("spAffNum", `好感度 ${Math.round(life.affection)} / 100`);
+  setBar("spHunger", life.hunger);
+  setBar("spEnergy", life.energy);
+  setBar("spMood", life.mood);
+  setTxt("spDays", `和喵喵相伴第 ${days} 天 · 摸过 ${life.totalPets} 次`);
+}
+function openStatusPanel() {
+  renderStatusPanel();
+  if (statusPanelEl) statusPanelEl.classList.remove("hidden");
+}
+
+if (feedBtn) feedBtn.addEventListener("click", feedCat);
+if (bondChipEl) bondChipEl.addEventListener("click", openStatusPanel);
+if (spCloseBtn) spCloseBtn.addEventListener("click", () => statusPanelEl.classList.add("hidden"));
+if (statusPanelEl) {
+  statusPanelEl.addEventListener("click", (e) => {
+    if (e.target === statusPanelEl) statusPanelEl.classList.add("hidden");
+  });
 }
 
 // =====================================================================
@@ -785,7 +1062,8 @@ function doGreeting() {
 modelViewer.addEventListener("load", () => {
   modelReady = true;
   try { modelViewer.jumpCameraToGoal(); } catch (_) {}   // correct framing at once
-  loadLife();        // restore mood / energy / sleep from the last visit
+  loadLife();        // restore needs / affection / sleep from the last visit
+  refreshHud();      // show the restored relationship stage on the HUD
   initBlink();       // load the closed-eye texture, start the blink loop
   setupDesktopAR();  // desktop has no camera-AR — offer a scan-to-phone QR
   console.log("Model loaded. Available animations:", modelViewer.availableAnimations);

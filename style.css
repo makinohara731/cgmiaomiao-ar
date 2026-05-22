@@ -266,6 +266,86 @@ body.cam-mode { background: #000; }
   padding: 4px 8px;
 }
 
+/* === Relationship chip (top-left) === */
+.bond-chip {
+  position: fixed; top: 14px; left: 14px;
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 13px 9px;
+  background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px);
+  border-radius: 16px; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.14);
+  font-size: 13px; font-weight: 600; color: #2a6e29;
+  z-index: 20; cursor: pointer;
+  user-select: none; -webkit-user-select: none;
+}
+.bond-chip .bond-heart { font-size: 15px; }
+.bond-chip::after {
+  content: ""; position: absolute;
+  left: 10px; right: 10px; bottom: 4px; height: 3px; border-radius: 2px;
+  background: linear-gradient(to right,
+    #ff8fab calc(var(--aff, 0) * 100%),
+    rgba(0, 0, 0, 0.1) calc(var(--aff, 0) * 100%));
+}
+
+/* === Dialogue choice buttons (GalGame-style) === */
+.choices {
+  position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 8px;
+  width: min(86vw, 360px); z-index: 18;
+}
+.choices.hidden { display: none; }
+.choice-btn {
+  padding: 12px 16px; font-size: 15px; font-weight: 600; color: #2a6e29;
+  background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(10px);
+  border: 2px solid #a4e6a3; border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  transition: transform 0.1s, background 0.15s;
+}
+.choice-btn:active { transform: scale(0.97); background: #eafbe8; }
+
+/* === Status panel (GalGame character sheet) === */
+.status-panel {
+  position: fixed; inset: 0; z-index: 210;
+  background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.3s, visibility 0.3s;
+}
+.status-panel.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+.sp-card {
+  position: relative; width: 86%; max-width: 340px;
+  background: #fff; border-radius: 22px; padding: 24px 24px 20px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
+}
+.sp-close {
+  position: absolute; top: 8px; right: 12px;
+  background: transparent; border: none; font-size: 21px; color: #bbb; padding: 4px 8px;
+}
+.sp-title {
+  text-align: center; font-size: 18px; font-weight: 700;
+  color: #2a6e29; margin-bottom: 12px;
+}
+.sp-stage-row { text-align: center; margin-bottom: 16px; }
+.sp-stage {
+  display: inline-block; padding: 5px 18px;
+  background: linear-gradient(135deg, #ff9ebb, #ff7fa3); color: #fff;
+  border-radius: 14px; font-size: 15px; font-weight: 700;
+}
+.sp-meter { display: flex; align-items: center; gap: 10px; margin: 9px 0; }
+.sp-label { width: 60px; font-size: 13px; color: #555; flex: 0 0 auto; }
+.sp-track {
+  flex: 1; height: 12px; border-radius: 7px; background: #eee; overflow: hidden;
+}
+.sp-fill {
+  height: 100%; width: 0%; border-radius: 7px;
+  background: linear-gradient(to right, #a4e6a3, #5fb95e);
+  transition: width 0.4s ease;
+}
+.sp-fill-aff { background: linear-gradient(to right, #ffb3c8, #ff6f91); }
+.sp-affnum { text-align: center; font-size: 12px; color: #999; margin: 3px 0 12px; }
+.sp-days {
+  text-align: center; font-size: 12px; color: #888;
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid #f0f0f0;
+}
+
 @media (max-height: 600px) {
   .side-bar { top: 40%; }
   .ar-btn { bottom: 110px; }
