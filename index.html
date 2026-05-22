@@ -13,12 +13,33 @@
 </head>
 <body>
 
+<!-- Loading screen (covers the 3D scene until the model is ready) -->
+<div id="loader" class="loader">
+  <div class="loader-cat">😺</div>
+  <p>喵喵正在赶来…</p>
+</div>
+
+<!-- First-use onboarding (shown once) -->
+<div id="onboard" class="overlay hidden">
+  <div class="onboard-card">
+    <div class="logo">😺</div>
+    <h1>喵喵咕咯精灵</h1>
+    <p>一只会犯困、会撒娇、有自己小脾气的精灵</p>
+    <ul class="hint">
+      <li>👆 点一点屏幕 —— 摸摸它，连点会更亲昵</li>
+      <li>🎤 长按麦克风 —— 跟它说话、下指令</li>
+      <li>📱 摇一摇手机 —— 看它的反应</li>
+      <li>📷 「放进现实」 —— 把它带到你身边</li>
+    </ul>
+    <button id="onboardStart" class="primary-btn">开始玩 →</button>
+  </div>
+</div>
+
 <!-- Main scene -->
 <main id="scene">
   <model-viewer
     id="catModel"
     src="character_v2.glb"
-    ios-src="character_v2.usdz"
     alt="可爱的绿色小猫精灵"
     ar
     ar-modes="webxr scene-viewer quick-look"
@@ -32,21 +53,16 @@
     exposure="1.15"
     tone-mapping="aces"
     environment-image="neutral"
-    camera-orbit="90deg 85deg 4.5m"
+    camera-orbit="90deg 85deg 0.40m"
     field-of-view="30deg"
-    min-camera-orbit="auto auto 3.0m"
-    max-camera-orbit="auto auto 8m"
+    min-camera-orbit="auto auto 0.22m"
+    max-camera-orbit="auto auto 1.5m"
     autoplay
     animation-name="idle"
     animation-loop>
     <button slot="ar-button" id="arBtn" class="ar-btn">
       <span>📷</span> 放进现实
     </button>
-
-    <!-- HUD overlay rendered inside model-viewer -->
-    <div id="speechBubble" class="speech-bubble" slot="poster" style="display:none">
-      <span id="speechText"></span>
-    </div>
   </model-viewer>
 
   <!-- Animation buttons (bottom) -->
@@ -73,6 +89,15 @@
 
   <!-- Status indicator (top) -->
   <div id="status" class="status"></div>
+
+  <!-- Emote bubble — reflects the sprite's mood / current behaviour -->
+  <div id="emote" class="emote"></div>
+
+  <!-- Speech bubble — what the sprite says (chat / voice replies) -->
+  <div id="sayBubble" class="say-bubble"><span id="sayText"></span></div>
+
+  <!-- Desktop: no camera-AR — offer a QR to continue on a phone -->
+  <button id="qrBtn" class="ar-btn qr-btn"><span>📱</span> 手机看AR</button>
 </main>
 
 <!-- Chat panel (hidden by default) -->
@@ -85,6 +110,17 @@
   <div class="chat-input">
     <input id="chatInput" type="text" placeholder="说点什么...（试试：你饿吗？）" autocomplete="off">
     <button id="chatSend">发送</button>
+  </div>
+</div>
+
+<!-- QR modal — scan to open the AR-capable version on a phone -->
+<div id="qrModal" class="qr-modal hidden">
+  <div class="qr-card">
+    <button id="qrClose" class="qr-close" aria-label="关闭">✕</button>
+    <h2>在手机上和喵喵 AR 见面</h2>
+    <p>电脑没有 AR 相机～用手机扫一扫，<br>就能把喵喵放进你身边的现实里。</p>
+    <img id="qrImg" src="qr.png" alt="扫码打开 AR 版" width="220" height="220">
+    <span class="qr-url">makinohara731.github.io/cgmiaomiao-ar</span>
   </div>
 </div>
 
