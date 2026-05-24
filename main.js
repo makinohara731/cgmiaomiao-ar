@@ -285,8 +285,8 @@ async function playAnim(name) {
   }
 
   if (name === "attack") playHit();
-  if (name === "hurt")   playHurt();
-  if (name === "happy")  playTrill();
+  if (name === "hurt")   { playHurt(); flashExpression("sad", 1900); }
+  if (name === "happy")  { playTrill(); flashExpression("happy", 1900); }
 
   clearTimeout(oneShotTimer);
   if (!loop) {
@@ -802,8 +802,12 @@ modelViewer.addEventListener("click", (e) => {
 // eye variant. The sprite blinks on its own at a natural cadence and
 // keeps its eyes shut while it sleeps.
 // =====================================================================
-let eyesOpenTex = null, eyesClosedTex = null, headTexInfo = null;
-let eyesClosed = false, blinkReady = false, blinkTimer = null;
+let eyesOpenTex = null, eyesClosedTex = null, eyesHappyTex = null, eyesSadTex = null;
+let headTexInfo = null;
+let currentExpression = "open";     // open / blink / happy / sad
+let blinkReady = false;
+let blinkTimer = null;
+let expressionResetTimer = null;
 
 async function initBlink() {
   try {
@@ -813,20 +817,42 @@ async function initBlink() {
     headTexInfo = mat.pbrMetallicRoughness.baseColorTexture;
     eyesOpenTex = headTexInfo.texture;
     eyesClosedTex = await modelViewer.createTexture("textures/face_blink.webp");
+    // happy + sad load best-effort; if either fails the runtime degrades gracefully
+    try { eyesHappyTex = await modelViewer.createTexture("textures/face_happy.webp"); } catch (_) {}
+    try { eyesSadTex   = await modelViewer.createTexture("textures/face_sad.webp"); }   catch (_) {}
     blinkReady = true;
-    if (life.asleep) setEyes(true);
+    if (life.asleep) setExpression("blink");
     scheduleBlink();
   } catch (e) {
-    console.warn("blink init failed — eyes stay open:", e);
+    console.warn("expression init failed — eyes stay open:", e);
   }
 }
 
-function setEyes(closed) {
-  if (!blinkReady || closed === eyesClosed) return;
+// Swap the face atlas. "open" = the GLB's own texture; others are
+// runtime-loaded variants.
+function setExpression(name) {
+  if (!blinkReady || name === currentExpression) return;
+  let tex = eyesOpenTex;
+  if      (name === "blink") tex = eyesClosedTex;
+  else if (name === "happy") tex = eyesHappyTex || eyesClosedTex;   // fallback to blink
+  else if (name === "sad")   tex = eyesSadTex   || eyesOpenTex;     // fallback to open
   try {
-    headTexInfo.setTexture(closed ? eyesClosedTex : eyesOpenTex);
-    eyesClosed = closed;
+    headTexInfo.setTexture(tex);
+    currentExpression = name;
   } catch (_) { /* scene-graph API unavailable */ }
+}
+
+// Older callers still use setEyes(true|false) — keep the wrapper.
+function setEyes(closed) { setExpression(closed ? "blink" : "open"); }
+
+// Show a transient expression, then ease back to "open" (unless asleep).
+function flashExpression(name, ms = 1800) {
+  if (life.asleep) return;
+  setExpression(name);
+  clearTimeout(expressionResetTimer);
+  expressionResetTimer = setTimeout(() => {
+    if (!life.asleep) setExpression("open");
+  }, ms);
 }
 
 function scheduleBlink() {
@@ -836,14 +862,15 @@ function scheduleBlink() {
 
 function doBlink() {
   scheduleBlink();
-  if (!blinkReady || life.asleep || eyesClosed) return;
+  // only blink from a neutral open face (don't interrupt happy/sad/sleep)
+  if (!blinkReady || life.asleep || currentExpression !== "open") return;
   const dbl = Math.random() < 0.3;          // ~30% are double-blinks
-  setEyes(true);
+  setExpression("blink");
   setTimeout(() => {
-    setEyes(false);
+    setExpression("open");
     if (dbl) setTimeout(() => {
-      setEyes(true);
-      setTimeout(() => setEyes(false), 110);
+      setExpression("blink");
+      setTimeout(() => setExpression("open"), 110);
     }, 130);
   }, 115);
 }
