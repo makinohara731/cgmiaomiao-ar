@@ -337,8 +337,11 @@ function runBehavior() {
   if (life.hunger < 0.1) addAffection(-0.5);      // letting it starve hurts the bond
   refreshHud();
 
-  // energy crash → doze off
-  if (life.energy < 0.22 && now - life.lastInteract > 18000) {
+  // energy crash → doze off (more likely at night)
+  const isNight = timeBucket() === "night";
+  const sleepEnergy = isNight ? 0.36 : 0.22;
+  const sleepIgnore = isNight ? 12000 : 18000;
+  if (life.energy < sleepEnergy && now - life.lastInteract > sleepIgnore) {
     fallAsleep();
     return;
   }
@@ -1061,6 +1064,31 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // =====================================================================
+// Time of day — drives the storybook sky / sun-moon and biases the cat
+// (sleepier at night, lively in the day).
+// =====================================================================
+function timeBucket() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 11) return "morning";
+  if (h >= 11 && h < 17) return "afternoon";
+  if (h >= 17 && h < 22) return "evening";
+  return "night";
+}
+function applyTimeOfDay() {
+  const h = new Date().getHours();
+  let cls = "time-day";
+  if (h >= 5 && h < 7)  cls = "time-dawn";
+  else if (h >= 18 && h < 20) cls = "time-dusk";
+  else if (h >= 20 || h < 5)  cls = "time-night";
+  for (const c of ["time-dawn", "time-day", "time-dusk", "time-night"]) {
+    document.body.classList.remove(c);
+  }
+  document.body.classList.add(cls);
+}
+applyTimeOfDay();
+setInterval(applyTimeOfDay, 30 * 60 * 1000);   // re-check every 30 minutes
+
+// =====================================================================
 // Model load → greet + start the life loop
 // =====================================================================
 // =====================================================================
@@ -1070,7 +1098,14 @@ document.addEventListener("visibilitychange", () => {
 // =====================================================================
 const ONBOARD_KEY = "miaomiao.onboarded.v1";
 
-// Greeting reflects how the sprite is doing right now — and it speaks.
+// Greeting reflects how the sprite is doing right now AND the time of day.
+const TIME_GREET = {
+  morning:   ["早上好喵～", "早安！今天也要一起呀", "唔…早晨的阳光暖暖的呢"],
+  afternoon: ["喵～你来啦！", "下午好呀～", "嗨！今天想玩点什么？"],
+  evening:   ["晚上好喵～", "天快黑了你才来呀", "今天过得开心吗？"],
+  night:     ["这么晚还来呀，喵～", "夜深啦…我有点困了", "嘘…小声点，喵咕～"],
+};
+
 function doGreeting() {
   if (life.asleep) {
     emote("💤");
@@ -1079,10 +1114,11 @@ function doGreeting() {
     playAnim("sleep");
     return;
   }
+  const t = timeBucket();
   if (life.mood > 0.72) {
     emote("❤️");
     playAnim("happy");
-    sayLine(pickFrom(["喵～你终于来啦！", "好想你呀，呼噜呼噜～", "嘿嘿，又见面啦！"]));
+    sayLine(pickFrom(TIME_GREET[t]));
   } else if (life.mood < 0.34) {
     emote("…");
     playAnim("lookaround");
@@ -1090,7 +1126,7 @@ function doGreeting() {
   } else {
     emote("👋");
     playAnim("wave");
-    sayLine(pickFrom(["喵～你好呀！", "嗨！今天玩点什么？", "喵呜～来啦来啦！"]));
+    sayLine(pickFrom(TIME_GREET[t]));
   }
 }
 
