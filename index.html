@@ -158,6 +158,7 @@
   <!-- Mic (voice) + chat (LLM) buttons (right side) -->
   <div id="sideBar" class="side-bar">
     <button id="camBtn" class="round-btn" title="AR互动模式" aria-label="AR互动模式">📸</button>
+    <button id="camSwapBtn" class="round-btn cam-swap-btn" title="切换前/后置镜头" aria-label="切换镜头">🔄</button>
     <button id="feedBtn" class="round-btn" title="喂食"      aria-label="喂喵喵吃东西">🍖</button>
     <button id="micBtn" class="round-btn" title="长按说话"  aria-label="语音命令">🎤</button>
     <button id="chatBtn" class="round-btn" title="跟猫聊天" aria-label="对话精灵">💬</button>
@@ -222,6 +223,37 @@
       <div class="sp-track"><div id="spMood" class="sp-fill"></div></div>
     </div>
     <div id="spDays" class="sp-days">和喵喵相伴第 1 天</div>
+    <button id="spOpenCfg" class="sp-cfg-link">⚙ 设置</button>
+  </div>
+</div>
+
+<!-- Settings panel — state-machine tunables -->
+<div id="cfgPanel" class="status-panel hidden">
+  <div class="sp-card">
+    <button id="cfgClose" class="sp-close" aria-label="关闭">✕</button>
+    <div class="sp-title">⚙ 喵喵设置</div>
+    <div class="cfg-row">
+      <div class="cfg-label">性格</div>
+      <div class="cfg-personality">
+        <button data-pers="default" class="pers-btn">默认</button>
+        <button data-pers="lively"  class="pers-btn">活泼</button>
+        <button data-pers="gentle"  class="pers-btn">温和</button>
+        <button data-pers="lazy"    class="pers-btn">慵懒</button>
+      </div>
+    </div>
+    <label class="cfg-row cfg-toggle">
+      <span>主动求关注</span>
+      <input type="checkbox" id="cfgProactive">
+    </label>
+    <label class="cfg-row cfg-toggle">
+      <span>夜里更容易犯困</span>
+      <input type="checkbox" id="cfgNightSleep">
+    </label>
+    <label class="cfg-row cfg-toggle">
+      <span>云端语音（更可爱）</span>
+      <input type="checkbox" id="cfgCloudVoice">
+    </label>
+    <div class="cfg-hint">性格会影响行为偏好与需求消耗速度；设置即时生效，保存在本地。</div>
   </div>
 </div>
 

@@ -19,6 +19,27 @@
 const WORKER_URL = "https://cgmiaomiao-asr.makinohara20050410.workers.dev";
 const ASR_ENDPOINT  = WORKER_URL ? `${WORKER_URL}/api/asr`  : null;
 const CHAT_ENDPOINT = WORKER_URL ? `${WORKER_URL}/api/chat` : null;
+const TTS_ENDPOINT  = WORKER_URL ? `${WORKER_URL}/api/tts`  : null;
+
+// Tunable behaviour — overridable from the settings panel; persisted.
+const CFG_KEY = "miaomiao.cfg.v1";
+const cfg = {
+  personality: "default",   // default / lively / gentle / lazy — biases pool + decay
+  proactive:   true,        // does it actively seek care when a need is low?
+  nightSleep:  true,        // sleepier at night
+  cloudVoice:  true,        // use cloud TTS (real voice); false → browser TTS only
+};
+try { Object.assign(cfg, JSON.parse(localStorage.getItem(CFG_KEY) || "{}")); } catch (_) {}
+function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (_) {} }
+
+// Personality presets bias the behaviour pool + need-decay rates.
+const PERSONALITY = {
+  default: { decayMul: 1.0, lively: 1.0, calm: 1.0 },
+  lively:  { decayMul: 1.4, lively: 2.0, calm: 0.6 },
+  gentle:  { decayMul: 0.7, lively: 0.7, calm: 1.4 },
+  lazy:    { decayMul: 0.5, lively: 0.4, calm: 1.7 },
+};
+const personality = () => PERSONALITY[cfg.personality] || PERSONALITY.default;
 
 // Clip registry — loop:true clips run forever; the rest play once and the
 // engine returns the sprite to its base loop afterwards.
@@ -76,14 +97,18 @@ const sayTextEl    = $("#sayText");
 const qrBtn   = $("#qrBtn");
 const qrModal = $("#qrModal");
 const qrClose = $("#qrClose");
-const camBtn  = $("#camBtn");
-const camFeed = $("#camFeed");
+const camBtn     = $("#camBtn");
+const camFeed    = $("#camFeed");
+const camSwapBtn = $("#camSwapBtn");
 const feedBtn       = $("#feedBtn");
 const bondChipEl    = $("#bondChip");
 const bondStageEl   = $("#bondStage");
 const statusPanelEl = $("#statusPanel");
 const spCloseBtn    = $("#spClose");
 const choicesEl     = $("#choices");
+const cfgPanelEl    = $("#cfgPanel");
+const cfgCloseBtn   = $("#cfgClose");
+const spOpenCfgBtn  = $("#spOpenCfg");
 
 // =====================================================================
 // Life state — the heart of the "motion ecology"
@@ -330,25 +355,28 @@ function runBehavior() {
     return;
   }
 
-  // awake: needs drift down between behaviours
-  life.hunger = clamp01(life.hunger - 0.024);
-  life.energy = clamp01(life.energy - 0.03);
-  life.mood   = clamp01(life.mood   - 0.02);
+  // awake: needs drift down between behaviours (rate × personality)
+  const pm = personality();
+  life.hunger = clamp01(life.hunger - 0.024 * pm.decayMul);
+  life.energy = clamp01(life.energy - 0.03  * pm.decayMul);
+  life.mood   = clamp01(life.mood   - 0.02  * pm.decayMul);
   if (life.hunger < 0.1) addAffection(-0.5);      // letting it starve hurts the bond
   refreshHud();
 
-  // energy crash → doze off (more likely at night)
-  const isNight = timeBucket() === "night";
-  const sleepEnergy = isNight ? 0.36 : 0.22;
-  const sleepIgnore = isNight ? 12000 : 18000;
+  // energy crash → doze off (more likely at night if the setting is on)
+  const nightSleepy = cfg.nightSleep && timeBucket() === "night";
+  const sleepEnergy = nightSleepy ? 0.36 : 0.22;
+  const sleepIgnore = nightSleepy ? 12000 : 18000;
   if (life.energy < sleepEnergy && now - life.lastInteract > sleepIgnore) {
     fallAsleep();
     return;
   }
 
   // a low need overrides ambient life — the cat actively seeks care
-  const need = lowestNeed();
-  if (need) { seekCare(need); return; }
+  if (cfg.proactive) {
+    const need = lowestNeed();
+    if (need) { seekCare(need); return; }
+  }
 
   // ambient: a spontaneous thought, a question, or an idle micro-action
   const roll = Math.random();
@@ -359,11 +387,11 @@ function runBehavior() {
   }
 
   const pool = [
-    ["lookaround", 28], ["groom", 20], ["sniff", 15],
-    ["stretch", 11], ["nothing", 11],
+    ["lookaround", 28 * pm.calm], ["groom", 20 * pm.calm], ["sniff", 15],
+    ["stretch", 11 * pm.calm], ["nothing", 11],
   ];
-  if (life.mood > 0.62 && life.energy > 0.5) pool.push(["happy", 12], ["spin", 6]);
-  if (life.energy > 0.72)                    pool.push(["jump", 6]);
+  if (life.mood > 0.62 && life.energy > 0.5) pool.push(["happy", 12 * pm.lively], ["spin", 6 * pm.lively]);
+  if (life.energy > 0.72)                    pool.push(["jump",  6 * pm.lively]);
 
   const pick = weightedPick(pool);
   if (pick === "nothing") {
@@ -645,6 +673,45 @@ if (statusPanelEl) {
     if (e.target === statusPanelEl) statusPanelEl.classList.add("hidden");
   });
 }
+
+// ---- Settings panel (state-machine tunables) ----
+function syncCfgUI() {
+  if (!cfgPanelEl) return;
+  cfgPanelEl.querySelectorAll(".pers-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.pers === cfg.personality));
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.checked = v; };
+  set("cfgProactive",  cfg.proactive);
+  set("cfgNightSleep", cfg.nightSleep);
+  set("cfgCloudVoice", cfg.cloudVoice);
+}
+function openCfgPanel() {
+  syncCfgUI();
+  if (cfgPanelEl) cfgPanelEl.classList.remove("hidden");
+}
+if (cfgPanelEl) {
+  cfgPanelEl.querySelectorAll(".pers-btn").forEach((b) => {
+    b.addEventListener("click", () => {
+      cfg.personality = b.dataset.pers;
+      saveCfg(); syncCfgUI();
+      showStatus(`性格：${b.textContent}`, 1400);
+    });
+  });
+  const wire = (id, key) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", () => { cfg[key] = el.checked; saveCfg(); });
+  };
+  wire("cfgProactive",  "proactive");
+  wire("cfgNightSleep", "nightSleep");
+  wire("cfgCloudVoice", "cloudVoice");
+  cfgPanelEl.addEventListener("click", (e) => {
+    if (e.target === cfgPanelEl) cfgPanelEl.classList.add("hidden");
+  });
+}
+if (cfgCloseBtn) cfgCloseBtn.addEventListener("click", () => cfgPanelEl?.classList.add("hidden"));
+if (spOpenCfgBtn) spOpenCfgBtn.addEventListener("click", () => {
+  if (statusPanelEl) statusPanelEl.classList.add("hidden");
+  openCfgPanel();
+});
 
 // =====================================================================
 // Petting — escalating reaction to taps on the sprite
@@ -958,14 +1025,39 @@ if (window.speechSynthesis) {
   window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
 }
 
-function speak(text) {
-  if (isMuted || !window.speechSynthesis) return;
-  // strip emoji / brackets so the synthesiser reads only the words
+let cloudAudio = null;
+
+async function speak(text) {
+  if (isMuted) return;
   const clean = (text || "")
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, "")
     .replace(/[\[\]{}]/g, "")
     .trim();
   if (!clean) return;
+
+  // ---- Cloud TTS first (real Qwen-TTS voice). Falls back to the
+  //      browser's SpeechSynthesis if the network or worker hiccups. ----
+  if (TTS_ENDPOINT && cfg.cloudVoice) {
+    try {
+      const resp = await fetch(TTS_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: clean }),
+      });
+      if (resp.ok) {
+        const blob = await resp.blob();
+        if (cloudAudio) { try { cloudAudio.pause(); } catch (_) {} }
+        const url = URL.createObjectURL(blob);
+        cloudAudio = new Audio(url);
+        cloudAudio.onended = cloudAudio.onerror = () => URL.revokeObjectURL(url);
+        await cloudAudio.play();
+        return;
+      }
+    } catch (_) { /* fall through to browser TTS */ }
+  }
+
+  // ---- Fallback: browser SpeechSynthesis ----
+  if (!window.speechSynthesis) return;
   try {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(clean);
@@ -1000,6 +1092,7 @@ muteBtn.addEventListener("click", () => {
   muteBtn.textContent = isMuted ? "🔇" : "🔊";
   muteBtn.classList.toggle("muted", isMuted);
   if (isMuted && window.speechSynthesis) window.speechSynthesis.cancel();
+  if (isMuted && cloudAudio) { try { cloudAudio.pause(); } catch (_) {} cloudAudio = null; }
   showStatus(isMuted ? "已静音" : "已开声", 1000);
 });
 
@@ -1199,6 +1292,7 @@ if (qrModal) {
 // =====================================================================
 let camStream = null;
 let camMode = false;
+let camFacing = "environment";   // "environment" (rear) or "user" (front)
 
 async function enterCamMode() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -1207,7 +1301,7 @@ async function enterCamMode() {
   }
   try {
     camStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } }, audio: false,
+      video: { facingMode: { ideal: camFacing } }, audio: false,
     });
   } catch (e) {
     showStatus("打不开摄像头，请允许相机权限", 2800);
@@ -1228,7 +1322,8 @@ async function enterCamMode() {
 
 function exitCamMode() {
   camMode = false;
-  document.body.classList.remove("cam-mode");
+  document.body.classList.remove("cam-mode", "cam-front");
+  camFacing = "environment";
   if (camBtn) { camBtn.textContent = "📸"; camBtn.classList.remove("active"); }
   modelViewer.setAttribute("shadow-intensity", "0.55");
   if (visionRAF) { cancelAnimationFrame(visionRAF); visionRAF = null; }
@@ -1240,11 +1335,30 @@ function exitCamMode() {
   if (camFeed) camFeed.srcObject = null;
 }
 
+// Swap between rear (environment) and front (user) cameras while in cam mode.
+async function swapCamera() {
+  if (!camMode || !navigator.mediaDevices?.getUserMedia) return;
+  camFacing = camFacing === "environment" ? "user" : "environment";
+  if (camStream) { camStream.getTracks().forEach((t) => t.stop()); camStream = null; }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: camFacing } }, audio: false,
+    });
+    camFeed.srcObject = camStream;
+    await camFeed.play().catch(() => {});
+    document.body.classList.toggle("cam-front", camFacing === "user");
+    showStatus(camFacing === "user" ? "前置镜头：让喵喵看你 🙂" : "后置镜头", 1700);
+  } catch (_) {
+    showStatus("打不开摄像头", 1800);
+  }
+}
+
 if (camBtn && camFeed) {
   camBtn.addEventListener("click", () => {
     if (camMode) exitCamMode(); else enterCamMode();
   });
 }
+if (camSwapBtn) camSwapBtn.addEventListener("click", swapCamera);
 window.addEventListener("pagehide", () => { if (camMode) exitCamMode(); });
 
 // =====================================================================
@@ -1350,24 +1464,43 @@ function handleGestures(result) {
   sayLine(r.line);
 }
 
-// React to a smile (face blendshapes).
+// React to face landmarks: track the user's face (eye-contact) + smile.
 function handleFace(result) {
-  if (!result || !result.faceBlendshapes || !result.faceBlendshapes.length) return;
-  let smile = 0;
-  for (const c of result.faceBlendshapes[0].categories) {
-    if (c.categoryName === "mouthSmileLeft" || c.categoryName === "mouthSmileRight") {
-      smile = Math.max(smile, c.score);
-    }
+  if (!result) return;
+
+  // ---- Eye tracking: turn the cat's whole body to face the user ----
+  if (result.faceLandmarks && result.faceLandmarks.length) {
+    const lm = result.faceLandmarks[0];
+    let sx = 0;
+    for (const p of lm) sx += p.x;
+    const cx = sx / lm.length;              // 0..1, face centre X in the image
+    const targetYaw = Math.max(-30, Math.min(30, (cx - 0.5) * 56));
+    faceTarget = targetYaw;
+    clearTimeout(faceReturnTimer);
+    faceReturnTimer = setTimeout(() => {    // ease back to front when face leaves
+      faceTarget = 0; if (!faceRAF) tickFace();
+    }, 1600);
+    if (!faceRAF) tickFace();
   }
-  if (smile > 0.45 && Date.now() >= visionCooldownUntil) {
-    visionCooldownUntil = Date.now() + 5000;
-    life.busyUntil = Date.now() + 2000;
-    life.lastInteract = Date.now();
-    addAffection(1.5);
-    life.mood = clamp01(life.mood + 0.12);
-    emote("❤️");
-    playAnim("happy");
-    sayLine(pickFrom(["你笑起来真好看喵～", "看到你笑我也好开心！", "嘿嘿，对着我笑啦～"]));
+
+  // ---- Smile detection ----
+  if (result.faceBlendshapes && result.faceBlendshapes.length) {
+    let smile = 0;
+    for (const c of result.faceBlendshapes[0].categories) {
+      if (c.categoryName === "mouthSmileLeft" || c.categoryName === "mouthSmileRight") {
+        smile = Math.max(smile, c.score);
+      }
+    }
+    if (smile > 0.45 && Date.now() >= visionCooldownUntil) {
+      visionCooldownUntil = Date.now() + 5000;
+      life.busyUntil = Date.now() + 2000;
+      life.lastInteract = Date.now();
+      addAffection(1.5);
+      life.mood = clamp01(life.mood + 0.12);
+      emote("❤️");
+      playAnim("happy");
+      sayLine(pickFrom(["你笑起来真好看喵～", "看到你笑我也好开心！", "嘿嘿，对着我笑啦～"]));
+    }
   }
 }
 

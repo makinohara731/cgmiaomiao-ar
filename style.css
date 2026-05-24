@@ -103,6 +103,11 @@ body.cam-mode #camFeed { display: block; }
 /* drop the storybook scene while the camera shows through */
 body.cam-mode { background: #000; }
 body.cam-mode .env-layer { display: none; }
+/* selfie-style mirror when the front camera is active */
+body.cam-front #camFeed { transform: scaleX(-1); }
+/* the swap-camera button only appears while in cam mode */
+.cam-swap-btn { display: none; }
+body.cam-mode .cam-swap-btn { display: flex; }
 
 /* === Storybook environment — sky / sun-moon / hills / trees / grass === */
 .env-layer {
@@ -410,6 +415,41 @@ body.time-dusk #envSun { opacity: .6; filter: drop-shadow(0 0 12px rgba(255, 130
   text-align: center; font-size: 12px; color: #888;
   margin-top: 14px; padding-top: 12px; border-top: 1px solid #f0f0f0;
 }
+
+/* === Settings panel — state-machine tunables (reuses .status-panel) === */
+.cfg-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 13px 4px; border-top: 1px solid #f0f0f0; gap: 12px;
+}
+.cfg-row:first-of-type { border-top: none; }
+.cfg-label { font-size: 14px; color: #444; font-weight: 600; }
+.cfg-personality { display: flex; gap: 6px; flex-wrap: wrap; }
+.pers-btn {
+  padding: 5px 12px; font-size: 13px; font-weight: 600;
+  color: #555; background: #fff;
+  border: 1.5px solid #d8e4d6; border-radius: 10px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+}
+.pers-btn:active { transform: scale(0.95); }
+.pers-btn.active {
+  color: #fff; background: linear-gradient(135deg, #5fb95e, #4a9e4a);
+  border-color: #4a9e4a;
+}
+.cfg-toggle { cursor: pointer; user-select: none; }
+.cfg-toggle span { font-size: 14px; color: #444; font-weight: 600; }
+.cfg-toggle input[type="checkbox"] {
+  width: 19px; height: 19px; accent-color: #5fb95e;
+}
+.cfg-hint {
+  font-size: 11px; color: #aaa; margin-top: 14px;
+  line-height: 1.6; text-align: center;
+}
+.sp-cfg-link {
+  display: block; margin: 16px auto 0; padding: 6px 14px;
+  background: transparent; border: none; color: #888;
+  font-size: 13px; cursor: pointer; transition: color 0.15s;
+}
+.sp-cfg-link:hover, .sp-cfg-link:active { color: #5fb95e; }
 
 @media (max-height: 600px) {
   .side-bar { top: 40%; }
