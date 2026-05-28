@@ -2246,7 +2246,14 @@ async function sendToASR(blob) {
     const fd = new FormData();
     fd.append("audio", blob, "voice.webm");
     const r = await fetch(ASR_ENDPOINT, { method: "POST", body: fd });
+    if (r.status === 429) { showStatus("请稍候再试 ♪", 1800); return; }
     const data = await r.json();
+    // Same envelope migration as sendChat — handle both shapes.
+    if (data && data.ok === false) {
+      console.error("ASR error envelope:", data.error);
+      showStatus("识别失败：" + (data.error?.code || "unknown"), 2200);
+      return;
+    }
     const text = data.text || "";
     console.log("ASR text:", text);
     if (text) {
@@ -2337,6 +2344,13 @@ async function sendChat(text) {
     }
     const data = await r.json();
     thinking.remove();
+    // v3: structured envelope { ok, reply, ... } / { ok:false, error:{code,message} }.
+    // Fall back to legacy { reply, ... } shape for older deployments.
+    if (data && data.ok === false) {
+      appendMsg("cat", `（连不上喵的大脑：${data.error?.code || "unknown"}）`);
+      console.error("Chat error envelope:", data.error);
+      return;
+    }
     const reply = data.reply || "喵？";
     appendMsg("cat", reply);
 
