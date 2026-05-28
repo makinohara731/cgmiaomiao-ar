@@ -2347,6 +2347,32 @@ if ("serviceWorker" in navigator) {
 }
 
 // =====================================================================
+// Online / offline indicator — flips a tiny chip near the bond chip
+// when the browser thinks it's offline. Useful so users understand
+// why chat is quiet instead of blaming the app.
+// =====================================================================
+function applyOnlineState() {
+  document.body.classList.toggle("is-offline", !navigator.onLine);
+}
+window.addEventListener("online",  applyOnlineState);
+window.addEventListener("offline", applyOnlineState);
+applyOnlineState();
+
+// If the player is fully offline, sendChat short-circuits with a quiet
+// stored line so the bubble still feels alive.
+const OFFLINE_REPLIES = [
+  "嗯…今天有点安静呢喵～",
+  "（眨眨眼，看着你）",
+  "我先陪你坐一会儿吧",
+  "网络好像睡着啦，喵",
+];
+bus.on(EVT.ChatError, (err) => {
+  if (err.code === "network" && !navigator.onLine) {
+    sayLine(OFFLINE_REPLIES[(Math.random() * OFFLINE_REPLIES.length) | 0]);
+  }
+});
+
+// =====================================================================
 // Global error boundary — never let a stray exception or unhandled
 // promise rejection wipe the entire UI. Show a tiny status toast and
 // keep the cat alive. Suppresses noise from intermittent

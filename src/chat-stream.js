@@ -9,12 +9,53 @@
 //     onDone:     ()    => speak(fullReply),
 //     onError:    (err) => showStatus(...),
 //   });
+//
+// Resilience: the *entry-point* attempts once, and on a transient
+// network failure (network error / 502 / 503 / 504 / HTTP-level abort
+// before any chunk arrived) retries ONCE after a short backoff. We
+// don't retry once chunks have started — the bubble already has
+// half a reply on it, retrying would duplicate text.
 
 import { bus, EVT } from "./bus.js";
 
 const SSE_PREFIX = "data:";
+const RETRY_DELAY_MS = 600;
+const TRANSIENT_STATUSES = new Set([0, 502, 503, 504]);
 
-export async function streamChat({ endpoint, body, onText, onEnvelope, onDone, onError }) {
+// Returns true if we should retry once. We only retry when nothing was
+// emitted yet (no chunks, no envelope) — otherwise the user would see
+// "喵～ 喵～今天怎么样" duplicated as the second attempt re-streams.
+function isRetryable(err, charsEmitted) {
+  if (charsEmitted > 0) return false;
+  return err.code === "network"
+      || err.code === "stream_io"
+      || (err.code === "http" && /\b(502|503|504)\b/.test(err.message || ""));
+}
+
+export async function streamChat(opts) {
+  let charsEmitted = 0;
+  const wrap = {
+    ...opts,
+    onText: (s) => { charsEmitted += s.length; opts.onText && opts.onText(s); },
+  };
+  const firstErr = await streamChatOnce(wrap);
+  if (!firstErr) return;
+  if (!isRetryable(firstErr, charsEmitted)) {
+    bus.emit(EVT.ChatError, firstErr);
+    opts.onError && opts.onError(firstErr);
+    return;
+  }
+  console.warn("[chat-stream] transient error, retrying:", firstErr.code);
+  await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+  const secondErr = await streamChatOnce(wrap);
+  if (secondErr) {
+    bus.emit(EVT.ChatError, secondErr);
+    opts.onError && opts.onError(secondErr);
+  }
+}
+
+// One attempt — returns null on success, or an error object on failure.
+async function streamChatOnce({ endpoint, body, onText, onEnvelope, onDone }) {
   let resp;
   try {
     resp = await fetch(endpoint, {
@@ -23,24 +64,15 @@ export async function streamChat({ endpoint, body, onText, onEnvelope, onDone, o
       body: JSON.stringify(body),
     });
   } catch (e) {
-    const err = { code: "network", message: e.message };
-    bus.emit(EVT.ChatError, err);
-    onError && onError(err);
-    return;
+    return { code: "network", message: e.message };
   }
   if (resp.status === 429) {
-    const err = { code: "rate_limit", message: "30/min cap" };
-    bus.emit(EVT.ChatError, err);
-    onError && onError(err);
-    return;
+    return { code: "rate_limit", message: "30/min cap" };
   }
   if (!resp.ok || !resp.body) {
     let msg = `HTTP ${resp.status}`;
     try { const j = await resp.json(); msg = j.error?.message || msg; } catch (_) {}
-    const err = { code: "http", message: msg };
-    bus.emit(EVT.ChatError, err);
-    onError && onError(err);
-    return;
+    return { code: "http", message: msg };
   }
 
   const reader  = resp.body.getReader();
@@ -69,8 +101,10 @@ export async function streamChat({ endpoint, body, onText, onEnvelope, onDone, o
           bus.emit(EVT.ChatEnvelope, frame);
           onEnvelope && onEnvelope(frame);
         } else if (frame.type === "error") {
+          // Inline error from the server — surface but don't retry
+          // (server already decided it failed).
           bus.emit(EVT.ChatError, frame);
-          onError && onError(frame);
+          // We still call onDone below since the stream is closing.
         } else if (frame.type === "done") {
           finished = true;
           break;
@@ -79,11 +113,9 @@ export async function streamChat({ endpoint, body, onText, onEnvelope, onDone, o
       if (finished) break;
     }
   } catch (e) {
-    const err = { code: "stream_io", message: e.message };
-    bus.emit(EVT.ChatError, err);
-    onError && onError(err);
-    return;
+    return { code: "stream_io", message: e.message };
   }
   bus.emit(EVT.ChatDone, null);
   onDone && onDone();
+  return null;
 }
