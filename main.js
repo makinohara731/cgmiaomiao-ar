@@ -132,6 +132,7 @@ const life = {
   seenEvents: [],      // bond-event ids already played
   catName: "",         // the name the user gave the cat (empty = use default)
   userName: "",        // the name the user chose to be called (unlocked at bond stage 3)
+  unlocks: [],         // tangible rewards unlocked at each bond stage
 };
 
 // What we show / send to the LLM when the cat doesn't have a custom name yet.
@@ -173,6 +174,7 @@ function saveLife() {
       affection: life.affection, bornAt: life.bornAt,
       seenEvents: life.seenEvents,
       catName: life.catName, userName: life.userName,
+      unlocks: life.unlocks,
       savedAt: Date.now(),
     }));
   } catch (_) { /* storage unavailable — run stateless */ }
@@ -192,6 +194,7 @@ function loadLife() {
   life.seenEvents = Array.isArray(saved.seenEvents) ? saved.seenEvents : [];
   life.catName    = typeof saved.catName === "string" ? saved.catName : "";
   life.userName   = typeof saved.userName === "string" ? saved.userName : "";
+  life.unlocks    = Array.isArray(saved.unlocks) ? saved.unlocks : [];
 
   const hoursAway = Math.max(0, (Date.now() - (saved.savedAt || Date.now())) / 3600000);
   if (hoursAway > 0.05) {
@@ -770,6 +773,9 @@ function proactiveSpeak() {
   sayLine(line);
   if (Math.random() < 0.5) playAnim(pickFrom(["lookaround", "groom", "sniff"]));
   markProactive();
+  // Once 'dream' is unlocked, occasionally jot a dream into the diary as
+  // the cat speaks — a quiet side effect of being in a deeper bond stage.
+  maybeWriteDream();
 }
 
 // ---- Dialogue choices — the cat asks, you pick, the bond shifts ----
@@ -859,12 +865,102 @@ const BOND_EVENTS = {
     "谢谢你…一直一直陪着我。喵～"] },
 };
 
+// ---- Unlocks: tangible per-stage gifts on top of the dialogue events ----
+const STAGE_UNLOCK = {
+  熟悉:     { key: "bgm",      label: "BGM 开关",     gift: "我学会哼歌啦，去设置里就能听到喵～" },
+  亲近:     { key: "dream",    label: "梦境日记",     gift: "我开始记得自己做的梦了，去日记里看看吧" },
+  黏人:     { key: "nickname", label: "用户昵称",     gift: "我想要一个专属的称呼你的方式～" },
+  形影不离: { key: "photo",    label: "永远的朋友徽章", gift: "我们的故事，已经满满一本啦" },
+};
+function hasUnlock(key)   { return Array.isArray(life.unlocks) && life.unlocks.includes(key); }
+function grantUnlock(key) {
+  if (hasUnlock(key)) return;
+  life.unlocks.push(key);
+  saveLife();
+  refreshHud();
+  // Tactile feedback — shimmer the bond chip and reveal the keepsake badge.
+  if (bondChipEl) {
+    bondChipEl.classList.remove("bond-shimmer");
+    void bondChipEl.offsetWidth;
+    bondChipEl.classList.add("bond-shimmer");
+  }
+  if (key === "photo") {
+    const badge = document.getElementById("foreverBadge");
+    if (badge) badge.classList.remove("hidden");
+  }
+}
+function applyUnlocksOnLoad() {
+  // Replay the visible side effects of any unlocks present on load.
+  if (hasUnlock("photo")) {
+    document.getElementById("foreverBadge")?.classList.remove("hidden");
+  }
+}
+
+// Cat dream lines — short, oneiric, drawn from when 亲近 unlocks "dream".
+const DREAMS = [
+  "梦里我变成了一片云，飘呀飘…",
+  "梦到一片海，海里全是鱼松软软～",
+  "梦里你也在，我们一起吃了好多草莓",
+  "我梦见自己长出了翅膀，喵～",
+  "梦到月亮变成了一颗大鱼丸",
+  "做了个奇怪的梦…里面的我是只大老虎",
+];
+function unlockDreamDiary() {
+  // First dream entry — a one-shot to celebrate the unlock.
+  writeDiary(`🌙 ${pickFrom(DREAMS)}`, "dream");
+}
+function maybeWriteDream() {
+  // Called occasionally from proactiveSpeak when 'dream' is unlocked.
+  if (!hasUnlock("dream")) return;
+  if (Math.random() < 0.25) writeDiary(`🌙 ${pickFrom(DREAMS)}`, "dream");
+}
+
+function openNicknameDialog() {
+  // Reuses the existing choices UI as a single-shot input flow.
+  if (!choicesEl) return;
+  emote("✨");
+  sayLine("我想给你一个专属的称呼～你想让我叫你什么呢？");
+  life.busyUntil = Date.now() + 60000;
+  choicesEl.innerHTML = "";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.maxLength = 6;
+  input.placeholder = "想被我怎么叫～";
+  input.className = "choice-input";
+  const submit = document.createElement("button");
+  submit.className = "choice-btn";
+  submit.textContent = "就这样叫我吧";
+  submit.addEventListener("click", () => {
+    const n = sanitizeName(input.value || "");
+    if (n) {
+      life.userName = n;
+      saveLife();
+      sayLine(`${n}！这下就是我们之间的小秘密啦～`);
+      emote("❤️");
+      writeDiary(`从今天起我会叫 ta「${n}」`, "bond");
+    } else {
+      sayLine("嗯…那我先这样叫你吧～");
+    }
+    choicesEl.classList.add("hidden");
+    life.busyUntil = Date.now() + 1200;
+  }, { once: true });
+  choicesEl.appendChild(input);
+  choicesEl.appendChild(submit);
+  choicesEl.classList.remove("hidden");
+}
+
 function triggerBondEvent(stage) {
   const ev = BOND_EVENTS[stage.name];
   if (!ev || life.seenEvents.includes(stage.name)) return;
   life.seenEvents.push(stage.name);
   saveLife();
   writeDiary(`今天我们的关系变成「${stage.name}」啦！`, "bond");
+  // Grant the stage-specific tangible unlock (if any).
+  const u = STAGE_UNLOCK[stage.name];
+  if (u) {
+    grantUnlock(u.key);
+    showStatus(`🎁 解锁 —— ${u.label}`, 4500);
+  }
   life.busyUntil = Date.now() + ev.lines.length * 3400 + 2000;
   showStatus(`✨ 羁绊加深 —— ${stage.name}`, 4200);
   if (ev.anim && (modelViewer.availableAnimations || []).includes(ev.anim)) {
@@ -872,7 +968,17 @@ function triggerBondEvent(stage) {
   }
   let i = 0;
   const next = () => {
-    if (i >= ev.lines.length) return;
+    if (i >= ev.lines.length) {
+      // After the scripted dialogue, fire the stage-specific gift moment.
+      if (u) {
+        setTimeout(() => sayLine(u.gift), 600);
+        setTimeout(() => {
+          if (u.key === "dream")    unlockDreamDiary();
+          if (u.key === "nickname") openNicknameDialog();
+        }, 2400);
+      }
+      return;
+    }
     sayLine(ev.lines[i]);
     emote(i === ev.lines.length - 1 ? "❤️" : "✨");
     i++;
@@ -975,7 +1081,7 @@ if (spOpenCfgBtn) spOpenCfgBtn.addEventListener("click", () => {
 });
 
 // ---- Diary panel: render entries newest-first, empty-state friendly ----
-const DIARY_TAG_ICON = { day: "🌤", feed: "🐟", bond: "✨", moment: "💭" };
+const DIARY_TAG_ICON = { day: "🌤", feed: "🐟", bond: "✨", moment: "💭", dream: "🌙" };
 function renderDiary() {
   if (!diaryListEl) return;
   if (!diary.length) {
@@ -1586,6 +1692,7 @@ modelViewer.addEventListener("load", () => {
   loadMem();         // restore facts the cat has learned about its human
   loadDiary();       // restore the diary
   dailyRoll();       // pick today's mood theme (idempotent within a day)
+  applyUnlocksOnLoad(); // re-reveal any unlocked keepsakes (e.g. forever badge)
   refreshHud();      // show the restored relationship stage on the HUD
   initBlink();       // load the closed-eye texture, start the blink loop
   setupDesktopAR();  // desktop has no camera-AR — offer a scan-to-phone QR

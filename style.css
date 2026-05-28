@@ -117,6 +117,48 @@ button { font-family: inherit; cursor: pointer; }
 .onboard-mini-hint {
   color: #88a585; font-size: 11px; margin-top: 12px; letter-spacing: 0.4px;
 }
+
+/* Forever-friend keepsake badge — unlocked at the 形影不离 stage. */
+.forever-badge {
+  position: fixed; right: 12px; top: 56px; z-index: 21;
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 11px; border-radius: 999px;
+  background: linear-gradient(120deg, #ffe0ec 0%, #ffd6a8 100%);
+  box-shadow: 0 4px 14px rgba(255, 156, 184, 0.35);
+  font-size: 12px; font-weight: 600; color: #b04a6a;
+  pointer-events: none;
+  animation: forever-float 3.6s ease-in-out infinite;
+}
+.forever-badge.hidden { display: none; }
+.forever-glow { font-size: 13px; animation: forever-twinkle 1.8s ease-in-out infinite; }
+@keyframes forever-float {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-3px); }
+}
+@keyframes forever-twinkle {
+  0%,100% { opacity: 0.55; transform: rotate(-8deg); }
+  50%     { opacity: 1;    transform: rotate(8deg); }
+}
+
+/* Bond-chip shimmer — sweeps once on each new stage unlock. */
+.bond-chip.bond-shimmer { animation: bond-shimmer 1.4s ease; }
+@keyframes bond-shimmer {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 156, 184, 0.0); }
+  35%  { box-shadow: 0 0 0 8px rgba(255, 196, 220, 0.55); }
+  100% { box-shadow: 0 0 0 24px rgba(255, 196, 220, 0); }
+}
+
+/* Inline name-input inside a choices flow (nickname unlock) */
+.choices .choice-input {
+  width: 100%; padding: 10px 14px; font-size: 15px;
+  border: 1.5px solid #cbe7c8; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #2a6e29; font-family: inherit;
+}
+.choices .choice-input:focus {
+  outline: none; border-color: #5fb95e;
+  box-shadow: 0 0 0 3px rgba(95, 185, 94, 0.18);
+}
 .onboard-card {
   max-width: 360px; width: 88%;
   background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px);
