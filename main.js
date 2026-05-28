@@ -1595,22 +1595,52 @@ modelViewer.addEventListener("load", () => {
 
   const firstVisit = !localStorage.getItem(ONBOARD_KEY);
   if (firstVisit && onboardEl) {
-    onboardEl.classList.remove("hidden");        // greeting waits for dismissal
+    runOnboardingCutscene();                     // 4-beat narrative intro
   } else {
     setTimeout(doGreeting, 700);
   }
   scheduleBehavior();
 }, { once: true });
 
+// ---- Onboarding cutscene driver ----
+//   4 beats: drifting → arrival → seeing you → name input. Each tap on the
+//   overlay advances to the next beat with a CSS opacity cross-fade. The
+//   last beat reveals the name input and the "交个朋友吧" button; clicking
+//   it (handled below by onboardStart) hides the overlay and runs the
+//   naming ceremony.
+let onboardBeat = 1;
+function runOnboardingCutscene() {
+  if (!onboardEl) return;
+  onboardBeat = 1;
+  onboardEl.classList.remove("hidden");
+  onboardEl.classList.remove("is-last");
+  syncOnboardBeats();
+  // Wire the tap-to-advance handler only once per session.
+  onboardEl.addEventListener("click", onOnboardTap);
+}
+function syncOnboardBeats() {
+  const beats = onboardEl.querySelectorAll(".beat");
+  beats.forEach((el) => {
+    const n = Number(el.dataset.beat);
+    el.classList.toggle("hidden", n !== onboardBeat);
+  });
+  if (onboardBeat === 4) onboardEl.classList.add("is-last");
+}
+function onOnboardTap(e) {
+  // Don't intercept clicks inside the final card (name input + button).
+  if (onboardBeat === 4) return;
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON")) return;
+  onboardBeat = Math.min(4, onboardBeat + 1);
+  syncOnboardBeats();
+}
+
 if (onboardStart) {
-  onboardStart.addEventListener("click", () => {
+  onboardStart.addEventListener("click", (e) => {
+    e.stopPropagation();                         // don't bubble back to overlay tap
     onboardEl.classList.add("hidden");
+    onboardEl.removeEventListener("click", onOnboardTap);
     try { localStorage.setItem(ONBOARD_KEY, "1"); } catch (_) {}
-    ensureAudio();                       // explicit gesture — unlock audio
-    // First-run only: pick up the name from the onboard input and run the
-    // naming beat instead of the generic greeting. If the user left the
-    // field blank we still call applyNaming("") so the cat acknowledges
-    // sticking with the default name.
+    ensureAudio();                               // explicit gesture — unlock audio
     const nameField = document.getElementById("catNameInput");
     const hasNameField = nameField && !life.catName;
     if (hasNameField) {

@@ -91,25 +91,52 @@
   <p>喵喵正在赶来…</p>
 </div>
 
-<!-- First-use onboarding (shown once) -->
+<!-- First-use onboarding — 4-beat narrative cutscene, advances on tap -->
 <div id="onboard" class="overlay hidden">
-  <div class="onboard-card">
-    <div class="logo">😺</div>
-    <h1>喵喵咕咯精灵</h1>
-    <p>一只会犯困、会撒娇、有自己小脾气的精灵</p>
-    <ul class="hint">
-      <li>👆 点一点屏幕 —— 摸摸它，连点会更亲昵</li>
-      <li>🎤 长按麦克风 —— 跟它说话、下指令</li>
-      <li>📱 摇一摇手机 —— 看它的反应</li>
-      <li>📸 点右侧相机 —— 让喵喵出现在你的镜头里</li>
-    </ul>
-    <div class="name-input">
-      <label for="catNameInput">想叫我什么呢？</label>
-      <input id="catNameInput" type="text" maxlength="6"
-             placeholder="留空就叫我喵喵～" autocomplete="off" spellcheck="false">
-    </div>
-    <button id="onboardStart" class="primary-btn">开始玩 →</button>
+  <!-- Star field backdrop sits behind every beat; faded out at the last beat -->
+  <div id="onboardStars" aria-hidden="true">
+    <span style="left:8%;top:14%"></span><span style="left:22%;top:8%"></span>
+    <span style="left:38%;top:18%"></span><span style="left:55%;top:6%"></span>
+    <span style="left:71%;top:13%"></span><span style="left:86%;top:20%"></span>
+    <span style="left:14%;top:32%"></span><span style="left:46%;top:38%"></span>
+    <span style="left:78%;top:34%"></span>
   </div>
+
+  <!-- Beat 1: a small soul drifting through space -->
+  <section class="beat" data-beat="1">
+    <div class="beat-cat">🌙</div>
+    <div class="beat-line">在很远很远的地方…<br>有一只迷路的小精灵</div>
+    <div class="beat-hint">轻点任意位置 ›</div>
+  </section>
+
+  <!-- Beat 2: it lands here, looks around -->
+  <section class="beat hidden" data-beat="2">
+    <div class="beat-cat">🐾</div>
+    <div class="beat-line">它沿着光，找到了这里…<br>会是个新朋友吗？</div>
+    <div class="beat-hint">轻点继续 ›</div>
+  </section>
+
+  <!-- Beat 3: it sees you -->
+  <section class="beat hidden" data-beat="3">
+    <div class="beat-cat">😺</div>
+    <div class="beat-line">"你好呀…<br>能听见我说话吗？"</div>
+    <div class="beat-hint">轻点继续 ›</div>
+  </section>
+
+  <!-- Beat 4: the naming card — the moment the relationship begins -->
+  <section class="beat hidden" data-beat="4">
+    <div class="onboard-card">
+      <div class="logo">😺</div>
+      <h1>那么…</h1>
+      <p>你想叫我什么呢？</p>
+      <div class="name-input">
+        <input id="catNameInput" type="text" maxlength="6"
+               placeholder="留空就叫我喵喵～" autocomplete="off" spellcheck="false">
+      </div>
+      <button id="onboardStart" class="primary-btn">交个朋友吧～</button>
+      <div class="onboard-mini-hint">之后可以从「⚙ 设置」改名字</div>
+    </div>
+  </section>
 </div>
 
 <!-- Main scene -->
