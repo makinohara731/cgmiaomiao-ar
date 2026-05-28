@@ -199,6 +199,89 @@ function loadLife() {
 }
 
 // =====================================================================
+// Long-term memory — facts the cat has learned about its human.
+//   Kept tiny on purpose so the LLM prompt stays in budget:
+//   facts cap at MEM_FACT_CAP, each value truncated to MEM_VAL_MAX chars,
+//   buildMemoryBlock() output capped to MEM_BLOCK_MAX chars before being
+//   spliced into the system prompt by the worker.
+// =====================================================================
+const MEM_KEY        = "miaomiao.mem.v1";
+const MEM_FACT_CAP   = 12;
+const MEM_VAL_MAX    = 24;
+const MEM_BLOCK_MAX  = 180;
+
+const mem = { facts: [], topics: [] };
+// facts: [{ k: "likes" | "dislikes" | "self" | "fact", v: string, ts: number }]
+// topics: small ring of recent free-form noun phrases for "they were talking about X"
+
+function loadMem() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(MEM_KEY) || "null"); } catch (_) {}
+  if (!saved) return;
+  mem.facts  = Array.isArray(saved.facts)  ? saved.facts.slice(-MEM_FACT_CAP)  : [];
+  mem.topics = Array.isArray(saved.topics) ? saved.topics.slice(-6) : [];
+}
+function saveMem() {
+  try { localStorage.setItem(MEM_KEY, JSON.stringify(mem)); } catch (_) {}
+}
+
+function addFact(k, v) {
+  if (!v) return;
+  v = String(v).trim().slice(0, MEM_VAL_MAX);
+  if (!v) return;
+  // Dedupe (k,v) — if it already exists, just refresh the timestamp.
+  const i = mem.facts.findIndex((f) => f.k === k && f.v === v);
+  if (i >= 0) { mem.facts[i].ts = Date.now(); }
+  else        { mem.facts.push({ k, v, ts: Date.now() }); }
+  if (mem.facts.length > MEM_FACT_CAP) mem.facts = mem.facts.slice(-MEM_FACT_CAP);
+  saveMem();
+}
+
+// Extract simple Chinese self-disclosure patterns from a user message.
+// Cheap regex on every user turn — no extra LLM call.
+// Longer prefixes MUST come before shorter ones (regex alternation is leftmost-first):
+// "不喜欢" must precede "不", otherwise "我不喜欢香菜" matches "不" and captures "喜欢香菜".
+const FACT_PATTERNS = [
+  { k: "dislikes", re: /我(?:不喜欢|讨厌吃|讨厌|害怕)([^，。！？!?,.\n、~～\s]{1,20})/g },
+  { k: "likes",    re: /我(?:很|超|特别|真的)?(?:喜欢|爱|想吃|想要)([^，。！？!?,.\n、~～\s]{1,20})/g },
+  { k: "self",     re: /(?:我叫|我是|你叫我|叫我)([^，。！？!?,.\n、~～\s]{1,12})/g },
+  { k: "fact",     re: /我(?:今天|昨天|刚刚|刚才)([^，。！？!?,.\n]{2,20})/g },
+];
+
+function extractFacts(text) {
+  if (!text || typeof text !== "string") return;
+  // Cap message length — long pastes shouldn't fill the fact store with junk.
+  const t = text.slice(0, 200);
+  for (const { k, re } of FACT_PATTERNS) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(t)) !== null) {
+      addFact(k, m[1]);
+      // self-nickname: also update life.userName so the LLM identity block uses it
+      if (k === "self" && !life.userName) {
+        life.userName = String(m[1]).slice(0, MEM_VAL_MAX);
+        saveLife();
+      }
+    }
+  }
+}
+
+// Build a compact, ≤MEM_BLOCK_MAX-char string the worker can splice into
+// the system prompt. Layout: "ta 喜欢 A、B；不喜欢 C；最近聊过 …"
+function buildMemoryBlock() {
+  if (!mem.facts.length && !mem.topics.length) return "";
+  const by = (k) => mem.facts.filter((f) => f.k === k).slice(-4).map((f) => f.v);
+  const parts = [];
+  const likes = by("likes");    if (likes.length)    parts.push(`ta 喜欢${likes.join("、")}`);
+  const dislikes = by("dislikes"); if (dislikes.length) parts.push(`不喜欢${dislikes.join("、")}`);
+  const facts = by("fact");     if (facts.length)    parts.push(`提过：${facts.join("；")}`);
+  if (mem.topics.length)        parts.push(`最近聊过${mem.topics.slice(-3).join("、")}`);
+  let s = parts.join("；");
+  if (s.length > MEM_BLOCK_MAX) s = s.slice(0, MEM_BLOCK_MAX - 1) + "…";
+  return s;
+}
+
+// =====================================================================
 // Status toast + emote bubble
 // =====================================================================
 let statusHideTimer = null;
@@ -1292,6 +1375,7 @@ modelViewer.addEventListener("load", () => {
   modelReady = true;
   try { modelViewer.jumpCameraToGoal(); } catch (_) {}   // correct framing at once
   loadLife();        // restore needs / affection / sleep from the last visit
+  loadMem();         // restore facts the cat has learned about its human
   refreshHud();      // show the restored relationship stage on the HUD
   initBlink();       // load the closed-eye texture, start the blink loop
   setupDesktopAR();  // desktop has no camera-AR — offer a scan-to-phone QR
@@ -1676,6 +1760,9 @@ async function sendChat(text) {
   text = text.trim();
   appendMsg("user", text);
   bumpInteract(0.5);
+  // Mine the user message for facts BEFORE the request so the worker
+  // already sees the newest fact in the memory block.
+  extractFacts(text);
   if (!CHAT_ENDPOINT) {
     appendMsg("cat", "（聊天功能未配置，部署 Cloudflare Workers 后启用）");
     return;
@@ -1689,6 +1776,7 @@ async function sendChat(text) {
       body: JSON.stringify({
         message: text,
         history: chatHistory.slice(-6),
+        memory: buildMemoryBlock(),                  // long-term facts about the user
         state: {                                     // so the LLM answers in-state
           mood:   Math.round(life.mood * 100) / 100,
           energy: Math.round(life.energy * 100) / 100,
