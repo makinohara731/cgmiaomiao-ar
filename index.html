@@ -9,6 +9,15 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
+  <!-- Preload the GLB in parallel with model-viewer JS so first-paint
+       is faster on slow networks. Also pre-fetch the worker so model-viewer
+       can start parsing while the page is laying out. -->
+  <link rel="preload" as="fetch" href="character_v2.glb" type="model/gltf-binary" crossorigin>
+  <link rel="modulepreload" href="src/bus.js">
+  <link rel="modulepreload" href="src/audio.js">
+  <link rel="modulepreload" href="src/chat-stream.js">
+  <link rel="modulepreload" href="src/particles.js">
+  <link rel="modulepreload" href="src/composites.js">
   <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
 </head>
 <body>

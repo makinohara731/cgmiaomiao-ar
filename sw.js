@@ -1,13 +1,23 @@
-// Service worker with cache-busting strategy.
-// v2: invalidates v1, uses network-first for GLB/JS (so animation updates show immediately).
-const CACHE_NAME = "miaomiao-v7";
+// Service worker — v4 release.
+// Strategy:
+//   * Navigation (HTML), CSS, JS, GLB, USDZ, MJS:  network-first with
+//     cache fallback (deploys are seen on next reload; offline still works).
+//   * Everything else (icons, fonts, textures):     cache-first (immutable-ish).
+//   * SSE endpoints (chat-stream):                  bypassed entirely;
+//     a SW that buffers an event-stream would break streaming.
+const CACHE_NAME = "miaomiao-v8";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
   "./manifest.json",
   "./icon-192.png",
-  "./icon-512.png"
+  "./icon-512.png",
+  "./src/bus.js",
+  "./src/audio.js",
+  "./src/chat-stream.js",
+  "./src/particles.js",
+  "./src/composites.js",
 ];
 
 self.addEventListener("install", (e) => {
@@ -22,17 +32,24 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
+function isFresh(url) {
+  return url.endsWith(".html") || url.endsWith("/") ||
+         url.endsWith(".glb") || url.endsWith(".js") ||
+         url.endsWith(".mjs") || url.endsWith(".usdz") ||
+         url.endsWith(".css");
+}
+
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
-  if (new URL(e.request.url).origin !== self.location.origin) return;
-
   const url = e.request.url;
-  // Network-first for navigation (HTML) and files that change often (GLB, JS, USDZ, CSS).
-  // Avoids the trap where users get stuck on an old cached index.html after deploys.
-  const isNav = e.request.mode === "navigate" || url.endsWith(".html") || url.endsWith("/");
-  if (isNav || url.endsWith(".glb") || url.endsWith(".js") || url.endsWith(".usdz") || url.endsWith(".css")) {
-    // cache:"reload" bypasses the browser HTTP cache so a deploy is never
-    // masked by a stale GLB/JS still sitting in the disk cache.
+  // Don't touch cross-origin traffic — model-viewer CDN, worker API,
+  // analytics, etc. all need to reach the network directly.
+  if (new URL(url).origin !== self.location.origin) return;
+  // Never cache or buffer streaming endpoints (no SSE → SW buffering).
+  if (url.includes("/api/")) return;
+
+  const isNav = e.request.mode === "navigate" || isFresh(url);
+  if (isNav) {
     e.respondWith(
       fetch(e.request, { cache: "reload" }).then(resp => {
         const copy = resp.clone();
@@ -42,8 +59,6 @@ self.addEventListener("fetch", (e) => {
     );
     return;
   }
-
-  // Cache-first for static assets
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
       const copy = resp.clone();

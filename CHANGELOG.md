@@ -1,5 +1,49 @@
 # CHANGELOG
 
+## v4 — Architecture + streaming + AR touch (2026-05-29)
+
+The release after v3 is an architecture pass — everything that was
+"shippable as a feature" got pulled into proper modules, and a few new
+interactions ride on top of the cleaner layout.
+
+- **Worker modularization.** `worker/src/worker.js` shrank from 425 LoC
+  to a routing stub. Logic moved into `handlers/` (asr / chat /
+  chat-stream / tts), `services/` (dashscope / persona), `middleware/`
+  (cors / rate-limit / log), and `util/` (response / json). Response
+  envelope is now strict: `{ok:true,...}` or `{ok:false,error:{code,
+  message,status}}`.
+- **Streaming chat.** New `/api/chat-stream` SSE endpoint. The worker
+  walks Qwen's deltas through `ReplyTextExtractor` and emits only the
+  characters inside the JSON `"reply"` value — the client's bubble
+  fills char-by-char instead of waiting for the closing brace. At
+  stream end the server re-parses the assembled JSON and emits a
+  single clean `{envelope}` frame for animation/emote/mood. Client
+  falls back to the non-streaming endpoint on any error.
+- **Frontend ES module migration.** `<script type="module" src="main.js">`.
+  New `src/bus.js` (tiny pub/sub with a frozen `EVT` enum), `src/audio.js`
+  (~310 LoC pulled out — all SFX + generative BGM, configured via
+  callbacks so it doesn't reach into globals), `src/chat-stream.js`,
+  `src/particles.js`, `src/composites.js`. `<link rel="modulepreload">`
+  for each in the HTML head so they fetch in parallel with the GLB.
+- **AR touch.** The single `click` handler on `<model-viewer>` became
+  a pointer-state machine: short tap on the cat is a single pet, long
+  press (≥350ms) is continuous petting with faster escalation, tap on
+  empty space makes the cat look toward it with a curious ❓ + chirp.
+  A pointer drag of >14px cancels the long-press so orbiting still
+  works.
+- **Particle layer.** `#particleLayer` floats DOM glyphs (♥/✦/💤) on
+  CSS keyframes. Wired so each pet event bursts hearts at the tap
+  position; bond unlocks burst sparkles from screen center.
+- **6 composite actions.** No Blender rerun: `dance`, `think`, `peek`,
+  `sneeze`, `beg`, `stargaze` are choreographed sequences of existing
+  clips + emotes + audio. Added to VOICE_MAP keywords and as 6 new
+  buttons in the anim bar (marked with a tiny ✦ corner badge).
+- **Performance.** Periodic `saveLife` runs on `requestIdleCallback`
+  with a setTimeout fallback for Safari. Pagehide stays synchronous
+  for state durability. `<link rel="preload">` for the GLB. SW v8
+  caches the new module files, bypasses `/api/*` so it doesn't break
+  SSE.
+
 ## v3 — Soul layer (2026-05-29)
 
 The cat went from a button-driven puppet with reactive chat to a small life with its own inner state and voice. Headline changes:

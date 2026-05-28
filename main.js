@@ -1605,7 +1605,17 @@ initOnFirstGesture();
 // =====================================================================
 // Persist the sprite's state — periodically and whenever the page hides.
 // =====================================================================
-setInterval(saveLife, 15000);
+// requestIdleCallback shim — Safari doesn't ship it. The fallback runs
+// the work on a 200ms setTimeout, which is fine for save operations that
+// have no real-time constraint.
+const onIdle = (fn) => (window.requestIdleCallback
+  ? window.requestIdleCallback(fn, { timeout: 1500 })
+  : setTimeout(fn, 200));
+
+// Periodic save runs on an idle callback so it never competes with a
+// frame the user is watching.
+setInterval(() => onIdle(saveLife), 15000);
+
 function persistAll() {
   saveLife();
   saveMem();
@@ -1615,6 +1625,8 @@ function persistAll() {
   // visibilitychange events the browser sometimes emits in pairs.
   if (daily.theme) writeDiary(`今天的心情：${daily.theme}`, "day");
 }
+// pagehide MUST be synchronous — the page is about to die and the
+// browser won't run idle callbacks after we return.
 window.addEventListener("pagehide", persistAll);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") persistAll();
