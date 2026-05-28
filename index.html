@@ -103,6 +103,11 @@
       <li>📱 摇一摇手机 —— 看它的反应</li>
       <li>📸 点右侧相机 —— 让喵喵出现在你的镜头里</li>
     </ul>
+    <div class="name-input">
+      <label for="catNameInput">想叫我什么呢？</label>
+      <input id="catNameInput" type="text" maxlength="6"
+             placeholder="留空就叫我喵喵～" autocomplete="off" spellcheck="false">
+    </div>
     <button id="onboardStart" class="primary-btn">开始玩 →</button>
   </div>
 </div>
@@ -203,7 +208,7 @@
 <div id="statusPanel" class="status-panel hidden">
   <div class="sp-card">
     <button id="spClose" class="sp-close" aria-label="关闭">✕</button>
-    <div class="sp-title">😺 喵喵 · 状态</div>
+    <div class="sp-title">😺 <span id="spName">喵喵</span> · 状态</div>
     <div class="sp-stage-row"><span id="spStage" class="sp-stage">初遇</span></div>
     <div class="sp-meter">
       <span class="sp-label">💛 好感</span>

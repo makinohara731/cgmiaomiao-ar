@@ -72,6 +72,23 @@ button { font-family: inherit; cursor: pointer; }
 .onboard-card p { color: #555; margin: 0 0 18px; font-size: 14px; }
 .onboard-card .hint { list-style: none; padding: 0; margin: 0 0 22px; text-align: left; }
 .onboard-card .hint li { padding: 6px 8px; font-size: 14px; color: #333; }
+.onboard-card .name-input { margin: 6px 0 18px; text-align: left; }
+.onboard-card .name-input label {
+  display: block; font-size: 13px; color: #2a6e29; font-weight: 600;
+  margin-bottom: 6px; padding-left: 4px;
+}
+.onboard-card .name-input input {
+  width: 100%; padding: 11px 14px; font-size: 15px;
+  border: 1.5px solid #cbe7c8; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #2a6e29; font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.onboard-card .name-input input:focus {
+  outline: none; border-color: #5fb95e;
+  box-shadow: 0 0 0 3px rgba(95, 185, 94, 0.18);
+}
+.onboard-card .name-input input::placeholder { color: #9bbf99; }
 .primary-btn {
   width: 100%; padding: 14px 24px; font-size: 17px; font-weight: 600;
   color: white; background: linear-gradient(135deg, #5fb95e 0%, #4a9e4a 100%);

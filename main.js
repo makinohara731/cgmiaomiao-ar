@@ -126,7 +126,13 @@ const life = {
   affection: 0,        // 0..100 — the bond meter; defines the relationship stage
   bornAt: Date.now(),  // first-met timestamp (for "days together")
   seenEvents: [],      // bond-event ids already played
+  catName: "",         // the name the user gave the cat (empty = use default)
+  userName: "",        // the name the user chose to be called (unlocked at bond stage 3)
 };
+
+// What we show / send to the LLM when the cat doesn't have a custom name yet.
+const DEFAULT_CAT_NAME = "喵喵";
+const catNameDisplay = () => life.catName || DEFAULT_CAT_NAME;
 
 let currentAnim   = "idle";
 let isMuted       = false;
@@ -161,7 +167,9 @@ function saveLife() {
       energy: life.energy, mood: life.mood, hunger: life.hunger,
       asleep: life.asleep, totalPets: life.totalPets,
       affection: life.affection, bornAt: life.bornAt,
-      seenEvents: life.seenEvents, savedAt: Date.now(),
+      seenEvents: life.seenEvents,
+      catName: life.catName, userName: life.userName,
+      savedAt: Date.now(),
     }));
   } catch (_) { /* storage unavailable — run stateless */ }
 }
@@ -178,6 +186,8 @@ function loadLife() {
   life.affection  = Math.max(0, Math.min(100, saved.affection || 0));
   life.bornAt     = saved.bornAt || Date.now();
   life.seenEvents = Array.isArray(saved.seenEvents) ? saved.seenEvents : [];
+  life.catName    = typeof saved.catName === "string" ? saved.catName : "";
+  life.userName   = typeof saved.userName === "string" ? saved.userName : "";
 
   const hoursAway = Math.max(0, (Date.now() - (saved.savedAt || Date.now())) / 3600000);
   if (hoursAway > 0.05) {
@@ -658,7 +668,8 @@ function renderStatusPanel() {
   setBar("spHunger", life.hunger);
   setBar("spEnergy", life.energy);
   setBar("spMood", life.mood);
-  setTxt("spDays", `和喵喵相伴第 ${days} 天 · 摸过 ${life.totalPets} 次`);
+  setTxt("spDays", `和${catNameDisplay()}相伴第 ${days} 天 · 摸过 ${life.totalPets} 次`);
+  setTxt("spName", catNameDisplay());
 }
 function openStatusPanel() {
   renderStatusPanel();
@@ -1226,6 +1237,33 @@ const TIME_GREET = {
   night:     ["这么晚还来呀，喵～", "夜深啦…我有点困了", "嘘…小声点，喵咕～"],
 };
 
+// Sanitize a user-typed name. Trim, cap at 6 grapheme-ish chars, strip
+// control / quote / angle-bracket characters that could break TTS prompts
+// or look weird in the speech bubble.
+function sanitizeName(raw) {
+  if (typeof raw !== "string") return "";
+  let s = raw.replace(/[ -<>"'`\\\n\r\t]/g, "").trim();
+  // Array.from honors surrogate pairs (emoji counted as 1).
+  const arr = Array.from(s);
+  if (arr.length > 6) s = arr.slice(0, 6).join("");
+  return s;
+}
+
+// Persist the cat's name and produce a warm "记住你叫…" beat.
+function applyNaming(rawName) {
+  const name = sanitizeName(rawName);
+  life.catName = name;          // empty string means "use the default 喵喵"
+  saveLife();
+  refreshHud();
+  if (name) {
+    sayLine(`好哒～从今天起我就叫${name}啦`);
+    emote("❤️");
+  } else {
+    sayLine("那就还叫我喵喵吧～");
+    emote("✨");
+  }
+}
+
 function doGreeting() {
   if (life.asleep) {
     emote("💤");
@@ -1275,7 +1313,17 @@ if (onboardStart) {
     onboardEl.classList.add("hidden");
     try { localStorage.setItem(ONBOARD_KEY, "1"); } catch (_) {}
     ensureAudio();                       // explicit gesture — unlock audio
-    setTimeout(doGreeting, 400);
+    // First-run only: pick up the name from the onboard input and run the
+    // naming beat instead of the generic greeting. If the user left the
+    // field blank we still call applyNaming("") so the cat acknowledges
+    // sticking with the default name.
+    const nameField = document.getElementById("catNameInput");
+    const hasNameField = nameField && !life.catName;
+    if (hasNameField) {
+      setTimeout(() => applyNaming(nameField.value || ""), 400);
+    } else {
+      setTimeout(doGreeting, 400);
+    }
   });
 }
 
@@ -1646,6 +1694,8 @@ async function sendChat(text) {
           energy: Math.round(life.energy * 100) / 100,
           asleep: life.asleep,
           activity: currentAnim,
+          catName: catNameDisplay(),
+          userName: life.userName || "",
         },
       }),
     });
