@@ -17,6 +17,7 @@
 import { bus, EVT } from "./src/bus.js";
 import * as audio from "./src/audio.js";
 import { streamChat } from "./src/chat-stream.js";
+import * as particles from "./src/particles.js";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -1235,13 +1236,106 @@ function faceToward(clientX) {
   if (!faceRAF) tickFace();
 }
 
-// A tap anywhere in the scene pets the sprite. Precise mesh hit-testing
-// was too easy to miss on a small mobile target, so any non-UI tap counts.
-modelViewer.addEventListener("click", (e) => {
-  if (e.target.closest(".ar-btn") || e.target.closest(".anim-btn") ||
-      e.target.closest(".round-btn") || e.target.closest(".chat-panel")) return;
-  faceToward(e.clientX);
+// =====================================================================
+// Pointer interaction — three modes:
+//   1. Short tap on or near the cat   → single pet (existing behaviour)
+//   2. Long press (≥350ms) on the cat → continuous pet, faster escalation
+//   3. Short tap on empty space       → cat does a curious lookaround
+// Mode 3 makes the AR scene feel reactive instead of "the cat is the only
+// thing that matters". Heart particles spawn on every pet event so a
+// long-press is visibly rewarding.
+// =====================================================================
+const LONG_PRESS_MS = 350;
+const PET_TICK_MS = 320;
+let pressTimer = null;
+let pressIsLong = false;
+let pressTickInterval = null;
+let pressStart = null;
+let pressX = 0, pressY = 0;
+let lastLookAt = 0;
+
+function isUIElement(target) {
+  return !!(target.closest?.(".ar-btn") || target.closest?.(".anim-btn") ||
+            target.closest?.(".round-btn") || target.closest?.(".chat-panel") ||
+            target.closest?.(".bond-chip") || target.closest?.(".forever-badge") ||
+            target.closest?.(".status-panel") || target.closest?.(".cfg-panel"));
+}
+
+// model-viewer positions the cat near horizontal center; treat the
+// vertical middle 60% as "near the cat" so taps in the bottom-bar
+// region or far-top stars count as "look at" instead of pets.
+function isNearCat(x, y) {
+  const w = window.innerWidth, h = window.innerHeight;
+  return Math.abs(x - w / 2) < w * 0.35 &&
+         y > h * 0.25 && y < h * 0.85;
+}
+
+function startPress(e) {
+  if (isUIElement(e.target)) return;
+  pressStart = Date.now();
+  pressX = e.clientX; pressY = e.clientY;
+  pressIsLong = false;
+  pressTimer = setTimeout(() => {
+    if (!isNearCat(pressX, pressY)) return;       // long-press in empty space is still a look
+    pressIsLong = true;
+    // First long-press tick fires immediately; subsequent ticks every PET_TICK_MS.
+    triggerPetAt(pressX, pressY, true);
+    pressTickInterval = setInterval(() => {
+      triggerPetAt(pressX, pressY, true);
+    }, PET_TICK_MS);
+  }, LONG_PRESS_MS);
+}
+function cancelPress() {
+  clearTimeout(pressTimer); pressTimer = null;
+  clearInterval(pressTickInterval); pressTickInterval = null;
+}
+function endPress(e) {
+  if (pressTimer || pressTickInterval) cancelPress();
+  if (!pressStart) return;
+  const elapsed = Date.now() - pressStart;
+  pressStart = null;
+  // If it was a short tap, decide pet vs look based on location.
+  if (!pressIsLong && elapsed < LONG_PRESS_MS) {
+    if (isUIElement(e.target)) return;
+    if (isNearCat(e.clientX, e.clientY)) {
+      triggerPetAt(e.clientX, e.clientY, false);
+    } else if (Date.now() - lastLookAt > 1800) {   // throttle empty-space taps
+      triggerLookAt(e.clientX, e.clientY);
+    }
+  }
+}
+
+function triggerPetAt(x, y, continuous) {
+  faceToward(x);
   petCat();
+  // Spawn 2-3 hearts near the cat's screen position on each pet event.
+  particles.burst("heart", x, y - 24, continuous ? 2 : 3);
+  bus.emit(EVT.PetTapped, { x, y, continuous });
+}
+
+function triggerLookAt(x, y) {
+  lastLookAt = Date.now();
+  faceToward(x);
+  // Curious head-tilt → lookaround animation + question emote.
+  emote("❓");
+  playAnim("lookaround");
+  playChirp();
+}
+
+modelViewer.addEventListener("pointerdown", startPress);
+modelViewer.addEventListener("pointerup",   endPress);
+modelViewer.addEventListener("pointercancel", cancelPress);
+modelViewer.addEventListener("pointerleave",  cancelPress);
+// Cancel long-press on significant drag (user is rotating the orbit).
+modelViewer.addEventListener("pointermove", (e) => {
+  if (!pressStart) return;
+  if (Math.hypot(e.clientX - pressX, e.clientY - pressY) > 14) cancelPress();
+});
+
+// Sparkle particles ride along bond unlocks.
+bus.on(EVT.BondUnlock, () => {
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+  particles.burst("sparkle", cx, cy, 7);
 });
 
 // =====================================================================
