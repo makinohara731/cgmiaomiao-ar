@@ -1,0 +1,4 @@
+# Build artifacts / source assets — kept on disk for reference, not deployed.
+*.usdc
+*_backup.glb
+*_backup.usdz
