@@ -16,6 +16,7 @@
  */
 import { bus, EVT } from "./src/bus.js";
 import * as audio from "./src/audio.js";
+import { streamChat } from "./src/chat-stream.js";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -30,9 +31,10 @@ const {
 // Config
 // =====================================================================
 const WORKER_URL = "https://cgmiaomiao-asr.makinohara20050410.workers.dev";
-const ASR_ENDPOINT  = WORKER_URL ? `${WORKER_URL}/api/asr`  : null;
-const CHAT_ENDPOINT = WORKER_URL ? `${WORKER_URL}/api/chat` : null;
-const TTS_ENDPOINT  = WORKER_URL ? `${WORKER_URL}/api/tts`  : null;
+const ASR_ENDPOINT          = WORKER_URL ? `${WORKER_URL}/api/asr`         : null;
+const CHAT_ENDPOINT         = WORKER_URL ? `${WORKER_URL}/api/chat`        : null;
+const CHAT_STREAM_ENDPOINT  = WORKER_URL ? `${WORKER_URL}/api/chat-stream` : null;
+const TTS_ENDPOINT          = WORKER_URL ? `${WORKER_URL}/api/tts`         : null;
 
 // Tunable behaviour — overridable from the settings panel; persisted.
 const CFG_KEY = "miaomiao.cfg.v1";
@@ -2014,38 +2016,121 @@ function appendMsg(role, text, cls = "") {
 // Recent conversation turns, sent to the worker for multi-turn coherence.
 let chatHistory = [];
 
+function buildChatBody(text) {
+  return {
+    message: text,
+    history: chatHistory.slice(-6),
+    memory: buildMemoryBlock(),
+    state: {
+      mood:   Math.round(life.mood * 100) / 100,
+      energy: Math.round(life.energy * 100) / 100,
+      asleep: life.asleep,
+      activity: currentAnim,
+      catName: catNameDisplay(),
+      userName: life.userName || "",
+      dailyTheme: daily.theme || "",
+    },
+  };
+}
+
+// Send a chat turn. Tries the SSE streaming endpoint first so the bubble
+// fills char-by-char; falls back to the JSON endpoint if the stream
+// fails for any reason (some PWAs / proxies break SSE).
 async function sendChat(text) {
   if (!text || !text.trim()) return;
   text = text.trim();
   appendMsg("user", text);
   bumpInteract(0.5);
-  // Mine the user message for facts BEFORE the request so the worker
-  // already sees the newest fact in the memory block.
   extractFacts(text);
   if (!CHAT_ENDPOINT) {
     appendMsg("cat", "（聊天功能未配置，部署 Cloudflare Workers 后启用）");
     return;
   }
+  bus.emit(EVT.ChatStart, { text });
+  // Streaming path — let the bubble fill as text arrives.
+  if (CHAT_STREAM_ENDPOINT) {
+    const ok = await tryStreaming(text);
+    if (ok) return;
+  }
+  // Fallback — classic POST /api/chat with the full envelope at the end.
+  await sendChatNonStreaming(text);
+}
+
+// Streaming attempt: returns true on success (even if the envelope was
+// short), false if we should fall back to the JSON endpoint.
+async function tryStreaming(text) {
   const thinking = appendMsg("cat", "喵喵在想…", "thinking");
-  emote("💭");                                       // the sprite visibly thinks
+  emote("💭");
+  // Open the speech bubble empty so chars stream into it.
+  if (sayTextEl) sayTextEl.textContent = "";
+  if (sayBubbleEl) sayBubbleEl.classList.add("show");
+
+  let reply = "";
+  let envelope = null;
+  let failed = false;
+
+  await streamChat({
+    endpoint: CHAT_STREAM_ENDPOINT,
+    body: buildChatBody(text),
+    onText: (delta) => {
+      reply += delta;
+      // Append directly to the on-screen bubble. Cheap textContent +=
+      // since strings are short and DOM ops are coalesced by the browser.
+      if (sayTextEl) sayTextEl.textContent = reply;
+    },
+    onEnvelope: (env) => {
+      envelope = env;
+      // The envelope may have a cleaner reply than the streamed text
+      // (e.g. retry path on the server). Trust it if it differs.
+      if (env.reply && env.reply.length && env.reply !== reply) {
+        reply = env.reply;
+        if (sayTextEl) sayTextEl.textContent = reply;
+      }
+    },
+    onError: (err) => {
+      failed = true;
+      console.warn("stream error, falling back:", err);
+    },
+  });
+
+  thinking.remove();
+  if (failed && !reply) {
+    if (sayBubbleEl) sayBubbleEl.classList.remove("show");
+    return false;
+  }
+  if (!reply) reply = "喵？";
+  appendMsg("cat", reply);
+  chatHistory.push({ role: "user", content: text }, { role: "assistant", content: reply });
+  if (chatHistory.length > 12) chatHistory = chatHistory.slice(-12);
+
+  if (life.asleep) wakeUp(false);
+  const mood = envelope?.mood;
+  if (mood === "up")   life.mood = clamp01(life.mood + 0.15);
+  if (mood === "down") life.mood = clamp01(life.mood - 0.12);
+
+  const anim = envelope?.animation;
+  if (anim && (modelViewer.availableAnimations || []).includes(anim)) userPlay(anim);
+  emote(envelope?.emote || "💬");
+
+  // TTS gets the final reply once — streaming TTS isn't worth the complexity.
+  duckBGM(0.35, Math.min(7000, 2200 + reply.length * 180));
+  speak(reply);
+  // Bubble auto-hides via the same timer as sayLine, but reset it here so the
+  // dwell window starts after the full reply has landed.
+  clearTimeout(sayTimer);
+  const dwell = Math.min(7000, 2200 + reply.length * 180);
+  sayTimer = setTimeout(() => sayBubbleEl?.classList.remove("show"), dwell);
+  return true;
+}
+
+async function sendChatNonStreaming(text) {
+  const thinking = appendMsg("cat", "喵喵在想…", "thinking");
+  emote("💭");
   try {
     const r = await fetch(CHAT_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: text,
-        history: chatHistory.slice(-6),
-        memory: buildMemoryBlock(),                  // long-term facts about the user
-        state: {                                     // so the LLM answers in-state
-          mood:   Math.round(life.mood * 100) / 100,
-          energy: Math.round(life.energy * 100) / 100,
-          asleep: life.asleep,
-          activity: currentAnim,
-          catName: catNameDisplay(),
-          userName: life.userName || "",
-          dailyTheme: daily.theme || "",
-        },
-      }),
+      body: JSON.stringify(buildChatBody(text)),
     });
     if (r.status === 429) {
       thinking.remove();
@@ -2055,8 +2140,6 @@ async function sendChat(text) {
     }
     const data = await r.json();
     thinking.remove();
-    // v3: structured envelope { ok, reply, ... } / { ok:false, error:{code,message} }.
-    // Fall back to legacy { reply, ... } shape for older deployments.
     if (data && data.ok === false) {
       appendMsg("cat", `（连不上喵的大脑：${data.error?.code || "unknown"}）`);
       console.error("Chat error envelope:", data.error);
@@ -2064,21 +2147,15 @@ async function sendChat(text) {
     }
     const reply = data.reply || "喵？";
     appendMsg("cat", reply);
-
-    chatHistory.push({ role: "user", content: text },
-                     { role: "assistant", content: reply });
+    chatHistory.push({ role: "user", content: text }, { role: "assistant", content: reply });
     if (chatHistory.length > 12) chatHistory = chatHistory.slice(-12);
-
-    if (life.asleep) wakeUp(false);                  // a reply rouses a dozing cat
+    if (life.asleep) wakeUp(false);
     if (data.mood === "up")   life.mood = clamp01(life.mood + 0.15);
     if (data.mood === "down") life.mood = clamp01(life.mood - 0.12);
-
     const anim = data.animation;
-    if (anim && (modelViewer.availableAnimations || []).includes(anim)) {
-      userPlay(anim);
-    }
-    emote(data.emote || "💬");                       // LLM's emote wins over the clip's
-    sayLine(reply);                                  // speech bubble + spoken voice
+    if (anim && (modelViewer.availableAnimations || []).includes(anim)) userPlay(anim);
+    emote(data.emote || "💬");
+    sayLine(reply);
   } catch (e) {
     thinking.remove();
     appendMsg("cat", "（连不上服务器，喵…）");
