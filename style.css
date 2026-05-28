@@ -315,6 +315,14 @@ body.time-dusk #envSun { opacity: .6; filter: drop-shadow(0 0 12px rgba(255, 130
 .anim-btn:active { transform: scale(0.94); }
 .anim-btn.active { background: linear-gradient(135deg, #a4e6a3 0%, #7bce7a 100%); }
 .anim-btn.active span { color: #2a6e29; font-weight: 600; }
+/* Composite (multi-clip macro) buttons — a faint warm tint so the user
+   knows they're "fancier" sequences rather than single clips. */
+.anim-btn.anim-composite span { color: #b0532a; font-weight: 500; }
+.anim-btn.anim-composite { position: relative; }
+.anim-btn.anim-composite::after {
+  content: "✦"; position: absolute; top: 2px; right: 4px;
+  font-size: 8px; color: #ffb37a; opacity: 0.75;
+}
 
 /* === Side bar (mic / chat / mute) === */
 .side-bar {

@@ -18,6 +18,7 @@ import { bus, EVT } from "./src/bus.js";
 import * as audio from "./src/audio.js";
 import { streamChat } from "./src/chat-stream.js";
 import * as particles from "./src/particles.js";
+import * as composites from "./src/composites.js";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -71,7 +72,20 @@ const CLIPS = {
 const isLoopClip = (n) => !!(CLIPS[n] && CLIPS[n].loop);
 
 // Chinese voice keyword → animation
+// Each entry is either an atomic GLB clip (anim) or a composite macro
+// (composite). Composites run a choreographed sequence of clips +
+// emotes + audio cues — they feel like new moves without retraining
+// the rig.
+//
+// Composites come BEFORE the single-clip fallbacks so that e.g.
+// "跳一下舞" hits dance (composite) before "跳" → jump (clip).
 const VOICE_MAP = [
+  { kw: /跳舞|舞蹈|来一段|秀一下/,         composite: "dance" },
+  { kw: /想想|想一下|你觉得|什么意思/,     composite: "think" },
+  { kw: /偷看|偷瞄|瞅瞅|藏哪了/,           composite: "peek" },
+  { kw: /喷嚏|过敏|感冒了/,                composite: "sneeze" },
+  { kw: /讨抱|要抱抱|可怜可怜|求你/,       composite: "beg" },
+  { kw: /看星星|星空|月亮|看天/,           composite: "stargaze" },
   { kw: /走|行走|散步|过来/,            anim: "walk" },
   { kw: /跑|奔跑|快点|加速/,            anim: "run" },
   { kw: /打|攻击|揍|出拳|咬/,           anim: "attack" },
@@ -492,7 +506,14 @@ function userPlay(name) {
 }
 
 animBar.querySelectorAll(".anim-btn").forEach((btn) => {
-  btn.addEventListener("click", () => userPlay(btn.dataset.anim));
+  btn.addEventListener("click", () => {
+    if (btn.dataset.composite) {
+      bumpInteract(0.4);
+      composites.play(btn.dataset.composite);
+    } else {
+      userPlay(btn.dataset.anim);
+    }
+  });
 });
 
 // =====================================================================
@@ -1426,6 +1447,18 @@ audio.configure({
   hasBgmUnlock: () => hasUnlock("bgm"),
 });
 
+// Procedural composite actions — sequences of existing clips that feel
+// like new moves. Wire the host hooks so each composite can drive the
+// scene without importing back into main.
+composites.configure({
+  playAnim,
+  emote,
+  sayLine,
+  audio,
+  faceToward,
+  busyUntil: (ms) => { life.busyUntil = Date.now() + ms; },
+});
+
 
 // =====================================================================
 // Voice — the sprite speaks its replies aloud. Browser SpeechSynthesis,
@@ -2076,9 +2109,17 @@ async function sendToASR(blob) {
 }
 
 function handleVoiceCommand(text) {
-  for (const { kw, anim } of VOICE_MAP) {
-    if (kw.test(text)) {
-      userPlay(anim);
+  for (const entry of VOICE_MAP) {
+    if (!entry.kw.test(text)) continue;
+    if (entry.composite) {
+      // Composite macros run a timed sequence; bumpInteract first so
+      // the autonomous loop knows the user just engaged.
+      bumpInteract(0.4);
+      composites.play(entry.composite);
+      return true;
+    }
+    if (entry.anim) {
+      userPlay(entry.anim);
       return true;
     }
   }
