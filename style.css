@@ -488,11 +488,16 @@ body.time-dusk #envSun { opacity: .6; filter: drop-shadow(0 0 12px rgba(255, 130
 /* === Mic recording state === */
 .round-btn.recording {
   background: linear-gradient(135deg, #ff4757 0%, #ee5a52 100%); color: white;
+  /* Outer glow ring scales with --mic-amp (0..1), set every frame by
+     the AnalyserNode RMS sampler. A flat keyframe pulse runs underneath
+     so the button still breathes when you're holding silently. */
+  box-shadow: 0 0 0 calc(4px + 14px * var(--mic-amp, 0)) rgba(255, 71, 87, calc(0.35 + 0.4 * var(--mic-amp, 0)));
   animation: pulse 1s infinite;
+  transition: box-shadow 60ms linear;
 }
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7); }
-  50% { box-shadow: 0 0 0 12px rgba(255, 71, 87, 0); }
+  0%, 100% { background: linear-gradient(135deg, #ff4757 0%, #ee5a52 100%); }
+  50%      { background: linear-gradient(135deg, #ff6b75 0%, #f57a72 100%); }
 }
 
 /* === Desktop QR (scan to open the AR version on a phone) === */

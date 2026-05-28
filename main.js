@@ -2088,6 +2088,73 @@ function handleFace(result) {
 // =====================================================================
 // Voice (ASR) — long-press mic to record, release to send
 // =====================================================================
+// Mic volume meter — running alongside the MediaRecorder so we can:
+//   1. animate the mic button's pulse intensity from the live amplitude
+//   2. classify the recording afterwards (whisper / normal / shout) so the
+//      cat can react to HOW you said it, not just what you said
+let micAnalyser = null;
+let micDataArr = null;
+let micRAF = null;
+let micPeak = 0;
+let micSampleStart = 0;
+
+function startMicMeter(stream) {
+  const ctx = ensureAudio();
+  const src = ctx.createMediaStreamSource(stream);
+  micAnalyser = ctx.createAnalyser();
+  micAnalyser.fftSize = 512;
+  src.connect(micAnalyser);
+  micDataArr = new Uint8Array(micAnalyser.frequencyBinCount);
+  micPeak = 0;
+  micSampleStart = Date.now();
+  const tick = () => {
+    if (!micAnalyser) return;
+    micAnalyser.getByteTimeDomainData(micDataArr);
+    // RMS in 0..1 — silence sits at 128/255 so subtract that baseline.
+    let sum = 0;
+    for (let i = 0; i < micDataArr.length; i++) {
+      const v = (micDataArr[i] - 128) / 128;
+      sum += v * v;
+    }
+    const rms = Math.sqrt(sum / micDataArr.length);
+    if (rms > micPeak) micPeak = rms;
+    // Drive a CSS var so the mic button glow scales with input volume.
+    micBtn.style.setProperty("--mic-amp", Math.min(1, rms * 3.5).toFixed(2));
+    micRAF = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+function stopMicMeter() {
+  if (micRAF) { cancelAnimationFrame(micRAF); micRAF = null; }
+  micBtn.style.setProperty("--mic-amp", "0");
+  try { micAnalyser?.disconnect(); } catch (_) {}
+  micAnalyser = null; micDataArr = null;
+  // Return the peak so the caller can classify the take.
+  const peak = micPeak;
+  micPeak = 0;
+  // If the recording was suspiciously short (<350ms) the peak is unreliable
+  // — treat as normal so we don't trigger spurious shout/whisper reactions.
+  const elapsed = Date.now() - micSampleStart;
+  return elapsed < 350 ? 0.5 : peak;
+}
+
+function reactToVolume(peak) {
+  if (peak >= 0.55) {
+    // Loud — cat flinches and complains
+    emote("💥");
+    playAnim("hurt");
+    playHurt();
+    setTimeout(() => sayLine("好大声…吓我一跳喵！"), 600);
+  } else if (peak > 0 && peak < 0.06) {
+    // Whisper — cat leans in
+    emote("👂");
+    playAnim("sniff");
+    setTimeout(() => sayLine("嗯？你说什么呀～"), 600);
+  }
+  // Mid-volume: no extra reaction — handleVoiceCommand handles intent.
+}
+
 async function startRecording() {
   if (!ASR_ENDPOINT) {
     showStatus("语音功能未配置，请用按钮操作", 2200);
@@ -2100,13 +2167,16 @@ async function startRecording() {
     mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
     mediaRecorder.onstop = async () => {
       const blob = new Blob(recordedChunks, { type: "audio/webm" });
+      const peak = stopMicMeter();
       stream.getTracks().forEach((t) => t.stop());
+      reactToVolume(peak);
       await sendToASR(blob);
     };
     mediaRecorder.start();
     isRecording = true;
     micBtn.classList.add("recording");
     showStatus("正在听...", 5000);
+    startMicMeter(stream);
   } catch (e) {
     console.error("Mic error:", e);
     showStatus("无法访问麦克风", 2000);
