@@ -1232,26 +1232,44 @@ function petCat() {
 // on top of whatever clip is playing (it is the model's orientation, not
 // an animation), so "it noticed me" reads on every interaction.
 // =====================================================================
-let faceTarget = 0;          // desired yaw, degrees
-let faceCurrent = 0;
+// Two-axis face tracking: yaw (left↔right) + pitch (up↔down). The
+// model-viewer `orientation` attribute takes "X Y Z" Euler degrees;
+// we drive X (pitch) and Y (yaw), leaving Z roll-free.
+let faceYawTarget   = 0;   // ±, degrees
+let faceYawCurrent  = 0;
+let facePitchTarget = 0;
+let facePitchCurrent = 0;
 let faceRAF = null;
 let faceReturnTimer = null;
 
 function tickFace() {
-  faceCurrent += (faceTarget - faceCurrent) * 0.16;
-  if (Math.abs(faceTarget - faceCurrent) < 0.25) faceCurrent = faceTarget;
-  modelViewer.setAttribute("orientation", `0deg 0deg ${faceCurrent.toFixed(1)}deg`);
-  faceRAF = (faceCurrent === faceTarget) ? null : requestAnimationFrame(tickFace);
+  faceYawCurrent   += (faceYawTarget   - faceYawCurrent)   * 0.16;
+  facePitchCurrent += (facePitchTarget - facePitchCurrent) * 0.16;
+  if (Math.abs(faceYawTarget   - faceYawCurrent)   < 0.25) faceYawCurrent   = faceYawTarget;
+  if (Math.abs(facePitchTarget - facePitchCurrent) < 0.25) facePitchCurrent = facePitchTarget;
+  modelViewer.setAttribute(
+    "orientation",
+    `${facePitchCurrent.toFixed(1)}deg ${faceYawCurrent.toFixed(1)}deg 0deg`
+  );
+  const settled = faceYawCurrent === faceYawTarget && facePitchCurrent === facePitchTarget;
+  faceRAF = settled ? null : requestAnimationFrame(tickFace);
 }
 
-function faceToward(clientX) {
-  const w = window.innerWidth || modelViewer.clientWidth || 1;
-  const rel = (clientX / w) * 2 - 1;            // -1 (left) … +1 (right)
-  // capped so the sprite turns clearly toward you but keeps its face visible
-  faceTarget = Math.max(-32, Math.min(32, rel * 34));
+function faceToward(clientX, clientY) {
+  const w = window.innerWidth  || modelViewer.clientWidth  || 1;
+  const h = window.innerHeight || modelViewer.clientHeight || 1;
+  const rx = (clientX / w) * 2 - 1;             // -1 (left) … +1 (right)
+  faceYawTarget = Math.max(-32, Math.min(32, rx * 34));
+  // Optional pitch — only when caller supplied a Y. Negative ry means tap
+  // is above center, so cat tilts UP (positive pitch). Capped narrower than
+  // yaw because over-tilting buries the face into the chest mesh.
+  if (typeof clientY === "number") {
+    const ry = (clientY / h) * 2 - 1;
+    facePitchTarget = Math.max(-14, Math.min(14, -ry * 16));
+  }
   clearTimeout(faceReturnTimer);
-  faceReturnTimer = setTimeout(() => {          // ease back to facing front
-    faceTarget = 0;
+  faceReturnTimer = setTimeout(() => {
+    faceYawTarget = 0; facePitchTarget = 0;
     if (!faceRAF) tickFace();
   }, 1700);
   if (!faceRAF) tickFace();
@@ -1327,7 +1345,7 @@ function endPress(e) {
 }
 
 function triggerPetAt(x, y, continuous) {
-  faceToward(x);
+  faceToward(x, y);
   petCat();
   // Spawn 2-3 hearts near the cat's screen position on each pet event.
   particles.burst("heart", x, y - 24, continuous ? 2 : 3);
@@ -1336,11 +1354,14 @@ function triggerPetAt(x, y, continuous) {
 
 function triggerLookAt(x, y) {
   lastLookAt = Date.now();
-  faceToward(x);
+  faceToward(x, y);
   // Curious head-tilt → lookaround animation + question emote.
   emote("❓");
   playAnim("lookaround");
   playChirp();
+  // Sparkle at the tap point so the user sees their gesture registered
+  // even before the head finishes turning.
+  particles.burst("sparkle", x, y, 3);
 }
 
 modelViewer.addEventListener("pointerdown", startPress);
@@ -2027,10 +2048,11 @@ function handleFace(result) {
     for (const p of lm) sx += p.x;
     const cx = sx / lm.length;              // 0..1, face centre X in the image
     const targetYaw = Math.max(-30, Math.min(30, (cx - 0.5) * 56));
-    faceTarget = targetYaw;
+    faceYawTarget = targetYaw;
     clearTimeout(faceReturnTimer);
     faceReturnTimer = setTimeout(() => {    // ease back to front when face leaves
-      faceTarget = 0; if (!faceRAF) tickFace();
+      faceYawTarget = 0; facePitchTarget = 0;
+      if (!faceRAF) tickFace();
     }, 1600);
     if (!faceRAF) tickFace();
   }
