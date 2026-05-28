@@ -228,7 +228,21 @@
       <div class="sp-track"><div id="spMood" class="sp-fill"></div></div>
     </div>
     <div id="spDays" class="sp-days">和喵喵相伴第 1 天</div>
-    <button id="spOpenCfg" class="sp-cfg-link">⚙ 设置</button>
+    <div id="spTheme" class="sp-theme"></div>
+    <div class="sp-link-row">
+      <button id="spOpenDiary" class="sp-cfg-link">📖 日记</button>
+      <button id="spOpenCfg" class="sp-cfg-link">⚙ 设置</button>
+    </div>
+  </div>
+</div>
+
+<!-- Diary panel — append-only log of life moments -->
+<div id="diaryPanel" class="status-panel hidden">
+  <div class="sp-card">
+    <button id="diaryClose" class="sp-close" aria-label="关闭">✕</button>
+    <div class="sp-title">📖 喵喵的日记</div>
+    <div id="diaryList" class="diary-list"></div>
+    <div class="cfg-hint">喵喵会把和你之间的小事偷偷写下来。</div>
   </div>
 </div>
 

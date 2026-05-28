@@ -109,6 +109,10 @@ const choicesEl     = $("#choices");
 const cfgPanelEl    = $("#cfgPanel");
 const cfgCloseBtn   = $("#cfgClose");
 const spOpenCfgBtn  = $("#spOpenCfg");
+const diaryPanelEl    = $("#diaryPanel");
+const diaryListEl     = $("#diaryList");
+const diaryCloseBtn   = $("#diaryClose");
+const spOpenDiaryBtn  = $("#spOpenDiary");
 
 // =====================================================================
 // Life state — the heart of the "motion ecology"
@@ -279,6 +283,70 @@ function buildMemoryBlock() {
   let s = parts.join("；");
   if (s.length > MEM_BLOCK_MAX) s = s.slice(0, MEM_BLOCK_MAX - 1) + "…";
   return s;
+}
+
+// =====================================================================
+// Daily roll — one mood/theme rolled per local day. Persistent so the
+// cat's "today's vibe" stays consistent across reloads within one day.
+// =====================================================================
+const DAILY_KEY = "miaomiao.daily.v1";
+const DAILY_THEMES = [
+  { theme: "想吃鱼",     moodBias:  0.05 },
+  { theme: "想撒娇",     moodBias:  0.10 },
+  { theme: "想念你",     moodBias:  0.03 },
+  { theme: "好奇宝宝",   moodBias:  0.06 },
+  { theme: "懒洋洋",     moodBias: -0.02 },
+  { theme: "想念星星",   moodBias:  0.00 },
+  { theme: "尾巴痒",     moodBias:  0.04 },
+  { theme: "做白日梦",   moodBias:  0.02 },
+];
+const daily = { ymd: "", theme: "", moodBias: 0 };
+const localYMD = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, "0")}-${d.getDate().toString().padStart(2, "0")}`;
+};
+function dailyRoll() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(DAILY_KEY) || "null"); } catch (_) {}
+  const today = localYMD();
+  if (saved && saved.ymd === today) {
+    Object.assign(daily, saved);
+    return;
+  }
+  const pick = pickFrom(DAILY_THEMES);
+  Object.assign(daily, { ymd: today, theme: pick.theme, moodBias: pick.moodBias });
+  try { localStorage.setItem(DAILY_KEY, JSON.stringify(daily)); } catch (_) {}
+  // Apply mood bias once per day (after the time-away decay in loadLife).
+  life.mood = clamp01(life.mood + pick.moodBias);
+}
+
+// =====================================================================
+// Diary — short append-only log of life moments. The cat "writes" an
+// entry at bond-stage promotions, at feed milestones, and at session
+// end. Capped so it stays compact and quick to render.
+// =====================================================================
+const DIARY_KEY = "miaomiao.diary.v1";
+const DIARY_CAP = 14;
+let diary = [];
+
+function loadDiary() {
+  try {
+    const raw = localStorage.getItem(DIARY_KEY);
+    diary = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(diary)) diary = [];
+  } catch (_) { diary = []; }
+}
+function saveDiary() {
+  try { localStorage.setItem(DIARY_KEY, JSON.stringify(diary.slice(-DIARY_CAP))); } catch (_) {}
+}
+function writeDiary(text, tag = "moment") {
+  if (!text) return;
+  const last = diary[diary.length - 1];
+  // De-dupe consecutive identical entries (e.g. session-end firing twice).
+  if (last && last.text === text && last.tag === tag) return;
+  diary.push({ ymd: localYMD(), text: String(text).slice(0, 80), tag, ts: Date.now() });
+  if (diary.length > DIARY_CAP) diary = diary.slice(-DIARY_CAP);
+  saveDiary();
 }
 
 // =====================================================================
@@ -796,6 +864,7 @@ function triggerBondEvent(stage) {
   if (!ev || life.seenEvents.includes(stage.name)) return;
   life.seenEvents.push(stage.name);
   saveLife();
+  writeDiary(`今天我们的关系变成「${stage.name}」啦！`, "bond");
   life.busyUntil = Date.now() + ev.lines.length * 3400 + 2000;
   showStatus(`✨ 羁绊加深 —— ${stage.name}`, 4200);
   if (ev.anim && (modelViewer.availableAnimations || []).includes(ev.anim)) {
@@ -826,6 +895,7 @@ function feedCat() {
   setTimeout(() => sayLine(pickFrom(wasHungry
     ? ["呜哇～太好吃了！谢谢你喵～", "嗯嗯！这个我最喜欢了！", "吃饱饱～最喜欢你了！"]
     : ["喵～虽然不太饿，还是谢谢你！", "嗯…再吃一点点也可以啦", "你对我真好喵～"])), 800);
+  writeDiary(wasHungry ? "今天 ta 在我饿肚子的时候喂了我，好暖" : "ta 又给我加餐啦，嘿嘿", "feed");
   refreshHud();
 }
 
@@ -849,6 +919,7 @@ function renderStatusPanel() {
   setBar("spMood", life.mood);
   setTxt("spDays", `和${catNameDisplay()}相伴第 ${days} 天 · 摸过 ${life.totalPets} 次`);
   setTxt("spName", catNameDisplay());
+  setTxt("spTheme", daily.theme ? `今日心情 · ${daily.theme}` : "");
 }
 function openStatusPanel() {
   renderStatusPanel();
@@ -902,6 +973,38 @@ if (spOpenCfgBtn) spOpenCfgBtn.addEventListener("click", () => {
   if (statusPanelEl) statusPanelEl.classList.add("hidden");
   openCfgPanel();
 });
+
+// ---- Diary panel: render entries newest-first, empty-state friendly ----
+const DIARY_TAG_ICON = { day: "🌤", feed: "🐟", bond: "✨", moment: "💭" };
+function renderDiary() {
+  if (!diaryListEl) return;
+  if (!diary.length) {
+    diaryListEl.innerHTML = `<div class="diary-empty">还没有日记呢，先和喵喵多玩玩吧～</div>`;
+    return;
+  }
+  // Newest entry first. Same-day entries grouped by date in the meta line.
+  const items = [...diary].reverse().slice(0, DIARY_CAP);
+  diaryListEl.innerHTML = items.map((d) => {
+    const icon = DIARY_TAG_ICON[d.tag] || "💭";
+    const safe = String(d.text)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `<div class="diary-item"><span class="diary-meta">${icon} ${d.ymd}</span>${safe}</div>`;
+  }).join("");
+}
+function openDiaryPanel() {
+  renderDiary();
+  if (diaryPanelEl) diaryPanelEl.classList.remove("hidden");
+}
+if (spOpenDiaryBtn) spOpenDiaryBtn.addEventListener("click", () => {
+  if (statusPanelEl) statusPanelEl.classList.add("hidden");
+  openDiaryPanel();
+});
+if (diaryCloseBtn) diaryCloseBtn.addEventListener("click", () => diaryPanelEl?.classList.add("hidden"));
+if (diaryPanelEl) {
+  diaryPanelEl.addEventListener("click", (e) => {
+    if (e.target === diaryPanelEl) diaryPanelEl.classList.add("hidden");
+  });
+}
 
 // =====================================================================
 // Petting — escalating reaction to taps on the sprite
@@ -1368,9 +1471,18 @@ initOnFirstGesture();
 // Persist the sprite's state — periodically and whenever the page hides.
 // =====================================================================
 setInterval(saveLife, 15000);
-window.addEventListener("pagehide", saveLife);
+function persistAll() {
+  saveLife();
+  saveMem();
+  saveDiary();
+  // Once per session, write a "today's vibe" diary line. Tagged "day" so
+  // the dedupe guard in writeDiary suppresses repeat firings on flaky
+  // visibilitychange events the browser sometimes emits in pairs.
+  if (daily.theme) writeDiary(`今天的心情：${daily.theme}`, "day");
+}
+window.addEventListener("pagehide", persistAll);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") saveLife();
+  if (document.visibilityState === "hidden") persistAll();
 });
 
 // =====================================================================
@@ -1472,6 +1584,8 @@ modelViewer.addEventListener("load", () => {
   try { modelViewer.jumpCameraToGoal(); } catch (_) {}   // correct framing at once
   loadLife();        // restore needs / affection / sleep from the last visit
   loadMem();         // restore facts the cat has learned about its human
+  loadDiary();       // restore the diary
+  dailyRoll();       // pick today's mood theme (idempotent within a day)
   refreshHud();      // show the restored relationship stage on the HUD
   initBlink();       // load the closed-eye texture, start the blink loop
   setupDesktopAR();  // desktop has no camera-AR — offer a scan-to-phone QR
@@ -1880,6 +1994,7 @@ async function sendChat(text) {
           activity: currentAnim,
           catName: catNameDisplay(),
           userName: life.userName || "",
+          dailyTheme: daily.theme || "",
         },
       }),
     });

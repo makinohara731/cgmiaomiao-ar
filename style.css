@@ -432,6 +432,31 @@ body.time-dusk #envSun { opacity: .6; filter: drop-shadow(0 0 12px rgba(255, 130
   text-align: center; font-size: 12px; color: #888;
   margin-top: 14px; padding-top: 12px; border-top: 1px solid #f0f0f0;
 }
+.sp-theme {
+  text-align: center; font-size: 12px; color: #5fb95e; font-weight: 600;
+  margin: 6px 0 0; letter-spacing: 0.4px;
+}
+.sp-theme:empty { display: none; }
+.sp-link-row { display: flex; justify-content: center; gap: 14px; }
+
+.diary-list {
+  margin: 8px -4px 4px; max-height: 56vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 9px;
+  padding: 6px 4px;
+}
+.diary-item {
+  background: rgba(95, 185, 94, 0.06);
+  border-left: 3px solid #5fb95e;
+  padding: 9px 12px; border-radius: 6px;
+  font-size: 13.5px; color: #2a4a29; line-height: 1.55;
+}
+.diary-item .diary-meta {
+  display: block; font-size: 11px; color: #88a585;
+  margin-bottom: 3px; letter-spacing: 0.3px;
+}
+.diary-empty {
+  text-align: center; color: #aaa; padding: 28px 0; font-size: 13px;
+}
 
 /* === Settings panel — state-machine tunables (reuses .status-panel) === */
 .cfg-row {
