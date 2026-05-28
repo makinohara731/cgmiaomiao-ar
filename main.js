@@ -471,9 +471,11 @@ function runBehavior() {
     if (need) { seekCare(need); return; }
   }
 
-  // ambient: a spontaneous thought, a question, or an idle micro-action
+  // ambient: a spontaneous thought, a question, or an idle micro-action.
+  // proactiveSpeak() decides between memory recall / time-of-day flavor /
+  // bond-stage monologue / random self-narration, and self-throttles.
   const roll = Math.random();
-  if (roll < 0.24) { spontaneousThought(); return; }
+  if (roll < 0.24) { proactiveSpeak(); return; }
   if (roll < 0.32 && life.affection >= 8 && now - lastQuestionAt > 50000) {
     askQuestion();
     return;
@@ -606,6 +608,100 @@ function spontaneousThought() {
   emote(pickFrom(["💭", "～", "·ω·", "🌸"]));
   sayLine(pickFrom(pool));
   if (Math.random() < 0.5) playAnim(pickFrom(["lookaround", "groom"]));
+}
+
+// ---- Proactive speech engine — the soul layer ----
+//   The cat speaks on its own, not just when spoken to. Picks a context-
+//   appropriate line (memory recall / time-of-day / bond thought / random
+//   self-narration), throttled so it doesn't get noisy. The throttle
+//   ring is in-memory only; resets on reload, which is fine — the cat
+//   was offline anyway.
+const PROACTIVE_MIN_GAP  = 90 * 1000;            // ≥90s between proactive lines
+const PROACTIVE_HOUR_CAP = 4;                    // ≤4 per rolling hour
+const proactiveStats = { lastAt: 0, ring: [] };
+
+function canProactive() {
+  const now = Date.now();
+  if (now - proactiveStats.lastAt < PROACTIVE_MIN_GAP) return false;
+  proactiveStats.ring = proactiveStats.ring.filter((t) => now - t < 3600 * 1000);
+  return proactiveStats.ring.length < PROACTIVE_HOUR_CAP;
+}
+function markProactive() {
+  const now = Date.now();
+  proactiveStats.lastAt = now;
+  proactiveStats.ring.push(now);
+}
+
+const PROACTIVE_TIME = {
+  morning:   ["太阳出来啦，喵～该起床咯", "早上的空气真清新呢", "唔…伸个懒腰，舒服"],
+  afternoon: ["午后的光好暖呀", "想找个地方蹭一蹭…", "今天的时间过得好慢喵"],
+  evening:   ["天要黑了呢…你在干嘛呀？", "晚饭吃了吗喵？", "夕阳真好看，像橘子味的"],
+  night:     ["你也还没睡呀…", "夜里好安静，喵～", "嘘…星星出来啦"],
+};
+
+const PROACTIVE_RANDOM = [
+  "刚才我好像梦到鱼啦…",
+  "诶？刚才那是什么声音？",
+  "你在做什么呢？让我看看～",
+  "尾巴痒痒的喵…",
+  "今天的我也很可爱吧？",
+  "唔…突然有点想撒娇了",
+  "外面的世界…我也想看看",
+  "（看着你的方向，眼睛眨了眨）",
+];
+
+// If the bond is high enough, occasionally call back to a remembered fact.
+// Returns null when nothing memorable applies, so the caller can fall back.
+function recallFromMemory() {
+  if (life.affection < 15) return null;
+  if (!mem.facts || !mem.facts.length) return null;
+  const f = pickFrom(mem.facts.slice(-6));
+  if (!f) return null;
+  if (f.k === "likes")    return `还记得你喜欢${f.v}吗，我也想试一试喵`;
+  if (f.k === "dislikes") return `${f.v}你不喜欢对吧？我也不要～`;
+  if (f.k === "self" && life.userName) return `${life.userName}…你今天好不好呀？`;
+  if (f.k === "fact")     return `你上次说${f.v}…后来呢？`;
+  return null;
+}
+
+function proactiveSpeak() {
+  // Throttle — silently fall back to a brief ambient action so the rhythm
+  // of the autonomous loop is preserved without the bubble firing.
+  if (!canProactive()) {
+    if (Math.random() < 0.6) {
+      emote(pickFrom(["♪", "～", "·ω·"]));
+      playAnim(pickFrom(["lookaround", "groom"]));
+    }
+    return;
+  }
+
+  let line = null;
+  const stage = stageOf(life.affection).name;
+
+  // 35% recall when memories exist and bond is past 初遇
+  if (Math.random() < 0.35) line = recallFromMemory();
+  // 45% conditional → time-of-day flavor
+  if (!line && Math.random() < 0.45) {
+    const pool = PROACTIVE_TIME[timeBucket()];
+    if (pool) line = pickFrom(pool);
+  }
+  // 50% conditional → bond-stage inner monologue (the original pool)
+  if (!line && Math.random() < 0.5) {
+    line = pickFrom(THOUGHTS[stage] || THOUGHTS["初遇"]);
+  }
+  // fallback → random self-narration
+  if (!line) line = pickFrom(PROACTIVE_RANDOM);
+
+  // If we know the user's name, sometimes lead the line with it. Don't
+  // do this for memory-recall lines that already address them by name.
+  if (life.userName && Math.random() < 0.3 && !line.startsWith(life.userName)) {
+    line = `${life.userName}…${line}`;
+  }
+
+  emote(pickFrom(["💭", "～", "·ω·", "🌸", "♪"]));
+  sayLine(line);
+  if (Math.random() < 0.5) playAnim(pickFrom(["lookaround", "groom", "sniff"]));
+  markProactive();
 }
 
 // ---- Dialogue choices — the cat asks, you pick, the bond shifts ----
