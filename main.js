@@ -2329,6 +2329,12 @@ async function sendChat(text) {
         },
       }),
     });
+    if (r.status === 429) {
+      thinking.remove();
+      appendMsg("cat", "（喵…太快啦，让我喘口气）");
+      showStatus("请稍候再试 ♪", 1800);
+      return;
+    }
     const data = await r.json();
     thinking.remove();
     const reply = data.reply || "喵？";
@@ -2368,5 +2374,23 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch((err) => console.log("SW reg failed:", err));
   });
 }
+
+// =====================================================================
+// Global error boundary — never let a stray exception or unhandled
+// promise rejection wipe the entire UI. Show a tiny status toast and
+// keep the cat alive. Suppresses noise from intermittent
+// CDN/network issues that we cannot recover from anyway.
+// =====================================================================
+let lastErrorAt = 0;
+function softError(label, info) {
+  const now = Date.now();
+  console.warn(`[${label}]`, info);
+  // Throttle the toast so we don't spam the player.
+  if (now - lastErrorAt < 4000) return;
+  lastErrorAt = now;
+  try { showStatus("有点小问题，喵继续陪着你～", 2200); } catch (_) {}
+}
+window.addEventListener("error", (e) => softError("error", e.message || e.error?.message));
+window.addEventListener("unhandledrejection", (e) => softError("reject", e.reason?.message || e.reason));
 
 console.log("喵喵精灵 AR · 生命行为引擎 loaded ✓");
