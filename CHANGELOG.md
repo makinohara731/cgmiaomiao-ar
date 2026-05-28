@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## v4.1 — Deeper AR + reactive interactions (2026-05-29)
+
+A follow-up pass on top of v4. Same architecture, more behaviour.
+
+- **2-axis face tracking.** `faceToward(clientX, clientY?)` now drives
+  both yaw (±32°) and pitch (±14°) via model-viewer's `orientation`
+  attribute. The cat actually tilts UP toward sky taps and DOWN toward
+  floor taps — much stronger "looks at you" feel in AR. Vision face
+  tracking (front camera) still drives yaw only since user-face yaw is
+  what we can detect reliably.
+- **SSE one-shot reconnect.** `streamChat` wraps a single attempt and
+  retries ONCE on transient errors (network / stream_io / HTTP 5xx)
+  after 600ms — but only when zero reply chars were emitted, so the
+  retry never duplicates text on the bubble.
+- **Offline UX.** `body.is-offline` flips on `navigator.onLine` events
+  to add a "离线" pill next to the bond chip and desaturate it. When
+  fully offline the cat says a quiet stored line ("嗯…今天有点安静呢
+  喵～") so the bubble still feels alive.
+- **Hint chip system.** `src/hints.js` shows one-time gesture tips,
+  persisted in `miaomiao.hints.v1`. Wired reactively from bus events:
+  long-press hint at 8s, tap-empty hint at 18s, composite-bar hint on
+  the 2nd user-driven anim, bond-chip hint 4.5s after first unlock.
+  Dark pill UI, anchored top or bottom.
+- **6 more composite actions.** stalk 👁, zoomies 🌀, knead 🐾,
+  headbutt 💚, scratch ✋, playdead 💀 — choreographed atop existing
+  clips. Voice keywords + 6 new anim-bar buttons. Library is now 12
+  composites in addition to the 17 atomic clips.
+- **Mic volume reactor.** AnalyserNode samples mic RMS per RAF while
+  recording. Live `--mic-amp` CSS var scales the mic button's glow
+  ring. After the take, peak volume classifies the recording: shout
+  (≥0.55) → cat flinches + plays hurt; whisper (<0.06) → cat sniffs
+  and leans in. Mid-volume passes through to the normal voice-command
+  path unchanged.
+
 ## v4 — Architecture + streaming + AR touch (2026-05-29)
 
 The release after v3 is an architecture pass — everything that was
