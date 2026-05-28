@@ -5,7 +5,7 @@
 //   * Everything else (icons, fonts, textures):     cache-first (immutable-ish).
 //   * SSE endpoints (chat-stream):                  bypassed entirely;
 //     a SW that buffers an event-stream would break streaming.
-const CACHE_NAME = "miaomiao-v8";
+const CACHE_NAME = "miaomiao-v9";
 const ASSETS = [
   "./",
   "./index.html",
@@ -18,6 +18,7 @@ const ASSETS = [
   "./src/chat-stream.js",
   "./src/particles.js",
   "./src/composites.js",
+  "./src/hints.js",
 ];
 
 self.addEventListener("install", (e) => {

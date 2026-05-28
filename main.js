@@ -19,6 +19,7 @@ import * as audio from "./src/audio.js";
 import { streamChat } from "./src/chat-stream.js";
 import * as particles from "./src/particles.js";
 import * as composites from "./src/composites.js";
+import * as hints from "./src/hints.js";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -2345,6 +2346,57 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch((err) => console.log("SW reg failed:", err));
   });
 }
+
+// =====================================================================
+// First-time gesture hints — chips that show once and stay seen.
+// Reactive hints fire from bus events so we only nudge when the
+// player has already discovered the basic interaction.
+// =====================================================================
+function scheduleSessionHints() {
+  // Onboarding done? Show the first hint a few seconds in so the
+  // greeting bubble doesn't compete for attention.
+  hints.scheduleHint(
+    "long-press",
+    "试试长按摸我 —— 我会一直撒娇喵～",
+    8000,
+    { anchor: "bottom" }
+  );
+  hints.scheduleHint(
+    "tap-empty",
+    "点空白处我会看过去哦",
+    18000,
+    { anchor: "top" }
+  );
+}
+// Trigger after onboarding (or immediately if already onboarded).
+setTimeout(() => {
+  if (localStorage.getItem("miaomiao.onboarded.v1")) scheduleSessionHints();
+}, 1500);
+// Show the composite hint the first time a user-driven anim plays —
+// proof they've figured out the bar; that's the right moment to mention
+// the fancier sequences.
+let animPlaysSeen = 0;
+bus.on(EVT.AnimPlayed, () => {
+  animPlaysSeen += 1;
+  if (animPlaysSeen === 2) {
+    hints.showHint(
+      "composites",
+      "动画栏往右滑还有跳舞 💃 看星星 🌟 哦",
+      { anchor: "bottom", ttlMs: 9000 }
+    );
+  }
+});
+// Mention the bond chip on the first unlock so users know where to
+// peek at their relationship progress.
+bus.on(EVT.BondUnlock, () => {
+  setTimeout(() => {
+    hints.showHint(
+      "bond-chip",
+      "点左上角心心，看看我们一起走过的日子",
+      { anchor: "top", ttlMs: 8000 }
+    );
+  }, 4500);
+});
 
 // =====================================================================
 // Online / offline indicator — flips a tiny chip near the bond chip

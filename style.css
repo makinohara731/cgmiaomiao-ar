@@ -135,6 +135,30 @@ body.is-offline .bond-chip::after {
   letter-spacing: 1px;
 }
 
+/* === Hint chips — one-time gesture tips, dismissible. === */
+#hintHost {
+  position: fixed; inset: 0; pointer-events: none; z-index: 25;
+}
+.hint-chip {
+  position: absolute; left: 50%; transform: translate(-50%, -8px) scale(0.95);
+  padding: 9px 14px 9px 16px;
+  display: inline-flex; gap: 10px; align-items: center;
+  background: rgba(34, 38, 60, 0.92); color: #fff;
+  font-size: 13px; line-height: 1.4; letter-spacing: 0.3px;
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  opacity: 0; transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.2, 0.7, 0.4, 1);
+  pointer-events: auto; cursor: pointer; max-width: 80vw;
+}
+.hint-anchor-top    { top: 70px; }
+.hint-anchor-center { top: 50%; transform: translate(-50%, -50%) scale(0.95); }
+.hint-anchor-bottom { bottom: 120px; }
+.hint-chip.hint-in   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.hint-anchor-center.hint-in { transform: translate(-50%, -50%) scale(1); }
+.hint-chip.hint-out  { opacity: 0; transform: translate(-50%, -16px) scale(0.92); }
+.hint-x { font-size: 16px; opacity: 0.65; line-height: 1; }
+.hint-chip:active { transform: translate(-50%, 0) scale(0.97); }
+
 /* === Particle layer — DOM glyphs floating up + fading out. === */
 #particleLayer {
   position: fixed; inset: 0; pointer-events: none; z-index: 23;
