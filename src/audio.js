@@ -26,7 +26,6 @@ export function ensureAudio() {
   if (audioCtx.state === "suspended") audioCtx.resume();
   return audioCtx;
 }
-export function getAudioCtx() { return audioCtx; }
 
 // =====================================================================
 // One-shot SFX
@@ -277,18 +276,23 @@ export function stopBGM(fadeMs = 600) {
   if (!bgm.running || !bgm.master) { bgm.running = false; return; }
   const ctx = audioCtx;
   if (!ctx) return;
+  // Snapshot the nodes to tear down BEFORE clearing bgm, so a startBGM()
+  // that immediately follows (which reassigns bgm.* to new nodes) is never
+  // killed by this deferred teardown. Previously startBGM→stopBGM(0) then
+  // installed fresh oscillators that the 50ms timeout then stopped.
+  const { master, nodes, lfo } = bgm;
+  bgm.running = false; bgm.nodes = []; bgm.master = null; bgm.lfo = null; bgm.lfoGain = null; bgm.theme = null;
   const now = ctx.currentTime;
   const fade = Math.max(0, fadeMs / 1000);
   try {
-    bgm.master.gain.cancelScheduledValues(now);
-    bgm.master.gain.setValueAtTime(bgm.master.gain.value, now);
-    bgm.master.gain.linearRampToValueAtTime(0.0001, now + fade);
+    master.gain.cancelScheduledValues(now);
+    master.gain.setValueAtTime(master.gain.value, now);
+    master.gain.linearRampToValueAtTime(0.0001, now + fade);
   } catch (_) {}
   setTimeout(() => {
-    try { bgm.nodes.forEach(({ osc }) => { osc.stop(); osc.disconnect(); }); } catch (_) {}
-    try { bgm.lfo?.stop(); bgm.lfo?.disconnect(); } catch (_) {}
-    try { bgm.master?.disconnect(); } catch (_) {}
-    bgm.running = false; bgm.nodes = []; bgm.master = null;
+    try { nodes.forEach(({ osc }) => { osc.stop(); osc.disconnect(); }); } catch (_) {}
+    try { lfo?.stop(); lfo?.disconnect(); } catch (_) {}
+    try { master?.disconnect(); } catch (_) {}
   }, fadeMs + 50);
 }
 

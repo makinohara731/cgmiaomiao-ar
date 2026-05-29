@@ -24,7 +24,7 @@ import * as hints from "./src/hints.js";
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
 const {
-  ensureAudio, getAudioCtx,
+  ensureAudio,
   playMeow, playHit, playHurt, playPurr, playYawn, playChirp,
   playSparkle, playEat, playPurrLong, playTrill,
   startBGM, stopBGM, duckBGM, bgmRunning, bgmTheme,
@@ -151,6 +151,9 @@ const diaryPanelEl    = $("#diaryPanel");
 const diaryListEl     = $("#diaryList");
 const diaryCloseBtn   = $("#diaryClose");
 const spOpenDiaryBtn  = $("#spOpenDiary");
+// Cached once — the anim-bar buttons are static. Avoids two whole-document
+// querySelectorAll(".anim-btn") on every playAnim() call.
+const ANIM_BTNS = animBar ? Array.from(animBar.querySelectorAll(".anim-btn")) : [];
 
 // =====================================================================
 // Life state — the heart of the "motion ecology"
@@ -189,6 +192,9 @@ let modelReady    = false;
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const pickFrom = (arr) => arr[(Math.random() * arr.length) | 0];
+// How long a speech bubble stays up — scales with reading length. Single
+// source of truth (was duplicated across sayLine + the streaming path).
+const bubbleDwellMs = (s) => Math.min(7000, 2200 + (s ? s.length : 0) * 180);
 function weightedPick(pairs) {
   const total = pairs.reduce((s, p) => s + p[1], 0);
   let r = Math.random() * total;
@@ -290,8 +296,22 @@ const FACT_PATTERNS = [
   { k: "dislikes", re: /我(?:不喜欢|讨厌吃|讨厌|害怕)([^，。！？!?,.\n、~～\s]{1,20})/g },
   { k: "likes",    re: /我(?:很|超|特别|真的)?(?:喜欢|爱|想吃|想要)([^，。！？!?,.\n、~～\s]{1,20})/g },
   { k: "self",     re: /(?:我叫|我是|你叫我|叫我)([^，。！？!?,.\n、~～\s]{1,12})/g },
-  { k: "fact",     re: /我(?:今天|昨天|刚刚|刚才)([^，。！？!?,.\n]{2,20})/g },
+  { k: "fact",     re: /我(?:今天|昨天|刚刚|刚才)([^，。！？!?,.\n、~～\s]{2,20})/g },
 ];
+
+// Capture a free-form conversation topic — what was the human talking about?
+// Powers buildMemoryBlock's "最近聊过…" recall (previously dead: topics was
+// read but never written). Kept short and deduped; skips greetings/commands.
+const MEM_TOPIC_CAP = 6;
+function addTopic(text) {
+  if (!text) return;
+  const t = String(text).trim().replace(/\s+/g, "").slice(0, 12);
+  if (t.length < 4) return;                         // skip "嗨""你好"-length noise
+  if (mem.topics[mem.topics.length - 1] === t) return;
+  mem.topics.push(t);
+  if (mem.topics.length > MEM_TOPIC_CAP) mem.topics = mem.topics.slice(-MEM_TOPIC_CAP);
+  saveMem();
+}
 
 function extractFacts(text) {
   if (!text || typeof text !== "string") return;
@@ -395,6 +415,7 @@ function writeDiary(text, tag = "moment") {
 // =====================================================================
 let statusHideTimer = null;
 function showStatus(msg, duration = 1800) {
+  if (!statusEl) return;
   statusEl.textContent = msg;
   statusEl.classList.add("show");
   if (statusHideTimer) clearTimeout(statusHideTimer);
@@ -479,12 +500,8 @@ async function playAnim(name) {
 
   // Only move the active highlight when the clip has a matching button —
   // ambient clips (lookaround/groom…) leave the idle button lit.
-  const btn = [...document.querySelectorAll(".anim-btn")]
-    .find((b) => b.dataset.anim === name);
-  if (btn) {
-    document.querySelectorAll(".anim-btn")
-      .forEach((b) => b.classList.toggle("active", b === btn));
-  }
+  const btn = ANIM_BTNS.find((b) => b.dataset.anim === name);
+  if (btn) ANIM_BTNS.forEach((b) => b.classList.toggle("active", b === btn));
 
   if (name === "attack") playHit();
   if (name === "hurt")   { playHurt(); flashExpression("sad", 1900); }
@@ -504,7 +521,7 @@ async function playAnim(name) {
 function userPlay(name) {
   bumpInteract();
   if (name === "sleep") life.asleep = true;
-  if (name === "idle" || name === "walk" || name === "run") life.asleep = false;
+  else wakeForUser();                     // any other explicit action wakes the cat
   emote(EMOTE_FOR[name] || "");
   life.busyUntil = Date.now() + 1600;
   playAnim(name).then(() => {
@@ -512,10 +529,11 @@ function userPlay(name) {
   });
 }
 
-animBar.querySelectorAll(".anim-btn").forEach((btn) => {
+ANIM_BTNS.forEach((btn) => {
   btn.addEventListener("click", () => {
     if (btn.dataset.composite) {
       bumpInteract(0.4);
+      wakeForUser();                      // composite shouldn't run under sleep
       composites.play(btn.dataset.composite);
     } else {
       userPlay(btn.dataset.anim);
@@ -641,6 +659,19 @@ function wakeUp(startled) {
   }
 }
 
+// Wake quietly for an explicit user-commanded action (button/voice/composite).
+// Unlike wakeUp() this plays no wake animation — the caller is about to play
+// its own clip, so we just clear the sleep state + eyes so we don't get the
+// broken "clip → snaps back to sleep → clip" sequence.
+function wakeForUser() {
+  if (!life.asleep) return;
+  life.asleep = false;
+  setEyes(false);
+  scheduleBlink();
+  life.energy = clamp01(life.energy + 0.3);
+  life.lastInteract = Date.now();
+}
+
 // =====================================================================
 // 养成系统 (raising & bond system) — needs, affection, the cat's own
 // initiative, dialogue choices and milestone story events. This is what
@@ -662,10 +693,18 @@ function stageOf(a) {
 }
 
 function addAffection(delta) {
-  const before = stageOf(life.affection).name;
-  life.affection = Math.max(0, Math.min(100, life.affection + delta));
-  const after = stageOf(life.affection);
-  if (delta > 0 && after.name !== before) triggerBondEvent(after);
+  const prev = life.affection;
+  life.affection = Math.max(0, Math.min(100, prev + delta));
+  if (delta > 0) {
+    // Fire a bond event for EVERY stage boundary crossed, ascending. A big
+    // jump (e.g. 14 → 40) crosses two bands; the old code only fired the
+    // final stage, so the lower stage's event AND its unlock (e.g. BGM) were
+    // skipped forever. triggerBondEvent grants its unlock synchronously, so
+    // even if dialogue overlaps on a rare double-cross, no unlock is lost.
+    for (const st of STAGES) {
+      if (st.min > prev && st.min <= life.affection) triggerBondEvent(st);
+    }
+  }
   refreshHud();
 }
 
@@ -720,13 +759,6 @@ const THOUGHTS = {
   黏人:     ["最喜欢你待在我身边了", "你不许走开太久哦！", "想一直一直黏着你～", "呼噜呼噜…好幸福"],
   形影不离: ["你就是我最重要的人啦", "我们会一直在一起对吧？", "有你在，哪里都是家", "（满足地蹭了蹭你）"],
 };
-function spontaneousThought() {
-  const pool = THOUGHTS[stageOf(life.affection).name] || THOUGHTS["初遇"];
-  emote(pickFrom(["💭", "～", "·ω·", "🌸"]));
-  sayLine(pickFrom(pool));
-  if (Math.random() < 0.5) playAnim(pickFrom(["lookaround", "groom"]));
-}
-
 // ---- Proactive speech engine — the soul layer ----
 //   The cat speaks on its own, not just when spoken to. Picks a context-
 //   appropriate line (memory recall / time-of-day / bond thought / random
@@ -1007,13 +1039,21 @@ function openNicknameDialog() {
   choicesEl.classList.remove("hidden");
 }
 
+// Pending timers for the in-flight bond-event dialogue chain. Cleared at the
+// start of each event so a second promotion (e.g. a delta crossing two bands)
+// can't interleave its dialogue/gift with the previous one's.
+let bondChainTimers = [];
+function clearBondChain() { bondChainTimers.forEach(clearTimeout); bondChainTimers = []; }
+
 function triggerBondEvent(stage) {
   const ev = BOND_EVENTS[stage.name];
   if (!ev || life.seenEvents.includes(stage.name)) return;
+  clearBondChain();                 // supersede any in-flight chain
   life.seenEvents.push(stage.name);
   saveLife();
   writeDiary(`今天我们的关系变成「${stage.name}」啦！`, "bond");
-  // Grant the stage-specific tangible unlock (if any).
+  // Grant the stage-specific tangible unlock (if any) — synchronous, so even
+  // a superseded chain never loses its unlock.
   const u = STAGE_UNLOCK[stage.name];
   if (u) {
     grantUnlock(u.key);
@@ -1029,18 +1069,18 @@ function triggerBondEvent(stage) {
     if (i >= ev.lines.length) {
       // After the scripted dialogue, fire the stage-specific gift moment.
       if (u) {
-        setTimeout(() => sayLine(u.gift), 600);
-        setTimeout(() => {
+        bondChainTimers.push(setTimeout(() => sayLine(u.gift), 600));
+        bondChainTimers.push(setTimeout(() => {
           if (u.key === "dream")    unlockDreamDiary();
           if (u.key === "nickname") openNicknameDialog();
-        }, 2400);
+        }, 2400));
       }
       return;
     }
     sayLine(ev.lines[i]);
     emote(i === ev.lines.length - 1 ? "❤️" : "✨");
     i++;
-    setTimeout(next, 3400);
+    bondChainTimers.push(setTimeout(next, 3400));
   };
   next();
 }
@@ -1067,7 +1107,12 @@ function feedCat() {
 // ---- Status panel — a GalGame-style character sheet ----
 function renderStatusPanel() {
   if (!statusPanelEl) return;
-  const days = Math.floor((Date.now() - life.bornAt) / 86400000) + 1;
+  // Calendar-day difference (not elapsed-ms/86400000) so "第 N 天" lines up
+  // with the localYMD()-stamped diary entries instead of drifting by the
+  // time-of-first-meeting.
+  const d0 = new Date(life.bornAt); d0.setHours(0, 0, 0, 0);
+  const dn = new Date();            dn.setHours(0, 0, 0, 0);
+  const days = Math.round((dn - d0) / 86400000) + 1;
   const setBar = (id, frac) => {
     const el = document.getElementById(id);
     if (el) el.style.width = Math.round(clamp01(frac) * 100) + "%";
@@ -1254,9 +1299,13 @@ function tickFace() {
   facePitchCurrent += (facePitchTarget - facePitchCurrent) * 0.16;
   if (Math.abs(faceYawTarget   - faceYawCurrent)   < 0.25) faceYawCurrent   = faceYawTarget;
   if (Math.abs(facePitchTarget - facePitchCurrent) < 0.25) facePitchCurrent = facePitchTarget;
+  // model-viewer orientation is "roll pitch yaw". The proven-working v3 code
+  // turned the cat left/right by writing yaw into the THIRD slot; the v4.1
+  // refactor wrongly moved yaw to the second slot (so it never turned). Roll
+  // stays 0, pitch in slot 2, yaw in slot 3.
   modelViewer.setAttribute(
     "orientation",
-    `${facePitchCurrent.toFixed(1)}deg ${faceYawCurrent.toFixed(1)}deg 0deg`
+    `0deg ${facePitchCurrent.toFixed(1)}deg ${faceYawCurrent.toFixed(1)}deg`
   );
   const settled = faceYawCurrent === faceYawTarget && facePitchCurrent === facePitchTarget;
   faceRAF = settled ? null : requestAnimationFrame(tickFace);
@@ -1322,7 +1371,7 @@ function startPress(e) {
   pressX = e.clientX; pressY = e.clientY;
   pressIsLong = false;
   pressTimer = setTimeout(() => {
-    if (!isNearCat(pressX, pressY)) return;       // long-press in empty space is still a look
+    if (!isNearCat(pressX, pressY)) return;       // long-press in empty space is ignored (a short tap there already looks)
     pressIsLong = true;
     // First long-press tick fires immediately; subsequent ticks every PET_TICK_MS.
     triggerPetAt(pressX, pressY, true);
@@ -1334,14 +1383,27 @@ function startPress(e) {
 function cancelPress() {
   clearTimeout(pressTimer); pressTimer = null;
   clearInterval(pressTickInterval); pressTickInterval = null;
+  // Clear the gesture so a cancelled drag (orbit) can't fall through to a
+  // tap action on the following pointerup.
+  pressStart = null;
+  pressIsLong = false;
 }
 function endPress(e) {
+  // Snapshot the gesture BEFORE any teardown: a normal short tap reaches
+  // pointerup while the long-press timer is still pending, so the
+  // cancelPress() below would null pressStart (it clears gesture state to
+  // suppress drags). Capturing first lets a clean tap still dispatch while a
+  // drag-cancelled gesture (pressStart already nulled by pointermove) is
+  // correctly ignored.
+  const start = pressStart;
+  const wasLong = pressIsLong;
   if (pressTimer || pressTickInterval) cancelPress();
-  if (!pressStart) return;
-  const elapsed = Date.now() - pressStart;
+  if (start == null) return;                         // nothing to act on (or drag-cancelled)
+  const elapsed = Date.now() - start;
   pressStart = null;
+  pressIsLong = false;
   // If it was a short tap, decide pet vs look based on location.
-  if (!pressIsLong && elapsed < LONG_PRESS_MS) {
+  if (!wasLong && elapsed < LONG_PRESS_MS) {
     if (isUIElement(e.target)) return;
     if (isNearCat(e.clientX, e.clientY)) {
       triggerPetAt(e.clientX, e.clientY, false);
@@ -1361,6 +1423,9 @@ function triggerPetAt(x, y, continuous) {
 
 function triggerLookAt(x, y) {
   lastLookAt = Date.now();
+  // Let a sleeping cat lie — an empty-space tap shouldn't yank it into a
+  // lookaround. (Taps ON the cat go through petCat, which wakes gently.)
+  if (life.asleep) { emote("💤"); return; }
   faceToward(x, y);
   // Curious head-tilt → lookaround animation + question emote.
   emote("❓");
@@ -1554,7 +1619,7 @@ function sayLine(text) {
   if (sayTextEl) sayTextEl.textContent = text;
   if (sayBubbleEl) sayBubbleEl.classList.add("show");
   clearTimeout(sayTimer);
-  const dwell = Math.min(7000, 2200 + text.length * 180);   // time to read
+  const dwell = bubbleDwellMs(text);                        // time to read
   sayTimer = setTimeout(() => {
     if (sayBubbleEl) sayBubbleEl.classList.remove("show");
   }, dwell);
@@ -1648,16 +1713,30 @@ function persistAll() {
   saveLife();
   saveMem();
   saveDiary();
-  // Once per session, write a "today's vibe" diary line. Tagged "day" so
-  // the dedupe guard in writeDiary suppresses repeat firings on flaky
-  // visibilitychange events the browser sometimes emits in pairs.
-  if (daily.theme) writeDiary(`今天的心情：${daily.theme}`, "day");
+  // Write the "today's vibe" diary line at most ONCE per local day, gated by
+  // a flag on the daily blob. The writeDiary adjacency-dedupe alone fails
+  // when feed/bond/dream entries land between two visibilitychange events,
+  // so the cat used to accumulate a "今天的心情" entry per tab-switch.
+  if (daily.theme && daily.ymd === localYMD() && !daily.diarized) {
+    writeDiary(`今天的心情：${daily.theme}`, "day");
+    daily.diarized = true;
+    try { localStorage.setItem(DAILY_KEY, JSON.stringify(daily)); } catch (_) {}
+  }
 }
 // pagehide MUST be synchronous — the page is about to die and the
 // browser won't run idle callbacks after we return.
 window.addEventListener("pagehide", persistAll);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") persistAll();
+  if (document.visibilityState === "hidden") {
+    persistAll();
+    // Stop the ambient behavior loop while backgrounded — no point decaying
+    // needs / animating a hidden cat (and rAF/anim work is throttled anyway).
+    clearTimeout(behaviorTimer);
+  } else {
+    // Returning to the tab: re-sync the sky and re-arm the loop.
+    applyTimeOfDay();
+    if (modelReady) scheduleBehavior();
+  }
 });
 
 // =====================================================================
@@ -1759,7 +1838,13 @@ function doGreeting() {
   }
 }
 
-modelViewer.addEventListener("load", () => {
+// Init runs exactly once — guarded so it's safe to call from the "load"
+// event, from the already-loaded fast path (cached GLB whose load fired
+// before this listener attached), and from the safety-net fallback.
+let initDone = false;
+function onModelLoaded() {
+  if (initDone) return;
+  initDone = true;
   modelReady = true;
   try { modelViewer.jumpCameraToGoal(); } catch (_) {}   // correct framing at once
   loadLife();        // restore needs / affection / sleep from the last visit
@@ -1781,7 +1866,11 @@ modelViewer.addEventListener("load", () => {
     setTimeout(doGreeting, 700);
   }
   scheduleBehavior();
-}, { once: true });
+}
+modelViewer.addEventListener("load", onModelLoaded, { once: true });
+// Fast path: if the GLB was cached and "load" already fired before this
+// module finished evaluating, the once-listener would never run.
+if (modelViewer.loaded) onModelLoaded();
 
 // ---- Onboarding cutscene driver ----
 //   4 beats: drifting → arrival → seeing you → name input. Each tap on the
@@ -1832,9 +1921,13 @@ if (onboardStart) {
   });
 }
 
-// Safety net: never trap the player on the loading screen.
+// Safety net: never trap the player on the loading screen. If "load" never
+// fired (slow/failed CDN), bring the life engine up in degraded mode anyway
+// so the page isn't a dead model-viewer — onModelLoaded is idempotent, and
+// playAnim no-ops gracefully when no animations are available.
 setTimeout(() => {
-  if (!modelReady && loaderEl) loaderEl.classList.add("hidden");
+  if (loaderEl) loaderEl.classList.add("hidden");
+  if (!modelReady) onModelLoaded();
 }, 15000);
 modelViewer.addEventListener("error", () => {
   if (loaderEl) loaderEl.classList.add("hidden");
@@ -1847,9 +1940,13 @@ modelViewer.addEventListener("error", () => {
 // open this same page on a phone, where AR works.
 // =====================================================================
 function setupDesktopAR() {
-  // canActivateAR is false on desktop and AR-incapable browsers
+  // canActivateAR is false on desktop and AR-incapable browsers — but it can
+  // also be momentarily false right after "load" on a capable phone, so we
+  // re-check shortly after instead of stranding a capable device with the QR.
   if (!qrBtn) return;
-  if (!modelViewer.canActivateAR) qrBtn.style.display = "flex";
+  const decide = () => { qrBtn.style.display = modelViewer.canActivateAR ? "none" : "flex"; };
+  decide();
+  setTimeout(decide, 1200);
 }
 if (qrBtn && qrModal) {
   qrBtn.addEventListener("click", () => qrModal.classList.remove("hidden"));
@@ -2099,6 +2196,12 @@ let micPeak = 0;
 let micSampleStart = 0;
 
 function startMicMeter(stream) {
+  // Defensive: if a prior meter is somehow still running (double-bound
+  // touch+mouse events on the same press), tear it down first so we don't
+  // leak the earlier RAF loop + AnalyserNode.
+  if (micRAF) { cancelAnimationFrame(micRAF); micRAF = null; }
+  try { micAnalyser?.disconnect(); } catch (_) {}
+  micAnalyser = null;
   const ctx = ensureAudio();
   const src = ctx.createMediaStreamSource(stream);
   micAnalyser = ctx.createAnalyser();
@@ -2226,6 +2329,7 @@ function handleVoiceCommand(text) {
       // Composite macros run a timed sequence; bumpInteract first so
       // the autonomous loop knows the user just engaged.
       bumpInteract(0.4);
+      wakeForUser();                      // don't choreograph on top of sleep
       composites.play(entry.composite);
       return true;
     }
@@ -2288,11 +2392,25 @@ async function sendChat(text) {
   appendMsg("user", text);
   bumpInteract(0.5);
   extractFacts(text);
+  addTopic(text);                         // remember what we talked about
   if (!CHAT_ENDPOINT) {
     appendMsg("cat", "（聊天功能未配置，部署 Cloudflare Workers 后启用）");
     return;
   }
+  // Fully offline → don't fire the request (which would error, retry, then
+  // fall back — three round-trips for nothing). Answer with a quiet line.
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    const line = OFFLINE_REPLIES[(Math.random() * OFFLINE_REPLIES.length) | 0];
+    appendMsg("cat", line);
+    sayLine(line);
+    return;
+  }
   bus.emit(EVT.ChatStart, { text });
+  // Claim the autonomous loop for the whole in-flight window so runBehavior
+  // can't fire proactiveSpeak/seekCare/askQuestion → sayLine() mid-stream
+  // (which would clobber the streaming bubble and start a competing TTS).
+  // Each terminal path below resets busyUntil to a short read-tail.
+  life.busyUntil = Date.now() + 20000;
   // Streaming path — let the bubble fill as text arrives.
   if (CHAT_STREAM_ENDPOINT) {
     const ok = await tryStreaming(text);
@@ -2342,6 +2460,7 @@ async function tryStreaming(text) {
   thinking.remove();
   if (failed && !reply) {
     if (sayBubbleEl) sayBubbleEl.classList.remove("show");
+    life.busyUntil = Date.now() + 400;     // release the loop for the fallback path
     return false;
   }
   if (!reply) reply = "喵？";
@@ -2359,13 +2478,16 @@ async function tryStreaming(text) {
   emote(envelope?.emote || "💬");
 
   // TTS gets the final reply once — streaming TTS isn't worth the complexity.
-  duckBGM(0.35, Math.min(7000, 2200 + reply.length * 180));
+  const dwell = bubbleDwellMs(reply);
+  duckBGM(0.35, dwell);
   speak(reply);
   // Bubble auto-hides via the same timer as sayLine, but reset it here so the
   // dwell window starts after the full reply has landed.
   clearTimeout(sayTimer);
-  const dwell = Math.min(7000, 2200 + reply.length * 180);
   sayTimer = setTimeout(() => sayBubbleEl?.classList.remove("show"), dwell);
+  // Release the loop, leaving a short read-tail so it doesn't barge in
+  // while the bubble is still up.
+  life.busyUntil = Date.now() + dwell;
   return true;
 }
 
@@ -2382,6 +2504,7 @@ async function sendChatNonStreaming(text) {
       thinking.remove();
       appendMsg("cat", "（喵…太快啦，让我喘口气）");
       showStatus("请稍候再试 ♪", 1800);
+      life.busyUntil = Date.now() + 400;
       return;
     }
     const data = await r.json();
@@ -2389,6 +2512,7 @@ async function sendChatNonStreaming(text) {
     if (data && data.ok === false) {
       appendMsg("cat", `（连不上喵的大脑：${data.error?.code || "unknown"}）`);
       console.error("Chat error envelope:", data.error);
+      life.busyUntil = Date.now() + 400;
       return;
     }
     const reply = data.reply || "喵？";
@@ -2402,10 +2526,12 @@ async function sendChatNonStreaming(text) {
     if (anim && (modelViewer.availableAnimations || []).includes(anim)) userPlay(anim);
     emote(data.emote || "💬");
     sayLine(reply);
+    life.busyUntil = Date.now() + bubbleDwellMs(reply);
   } catch (e) {
     thinking.remove();
     appendMsg("cat", "（连不上服务器，喵…）");
     console.error("Chat error:", e);
+    life.busyUntil = Date.now() + 400;
   }
 }
 

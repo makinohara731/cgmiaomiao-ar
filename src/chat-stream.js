@@ -20,7 +20,6 @@ import { bus, EVT } from "./bus.js";
 
 const SSE_PREFIX = "data:";
 const RETRY_DELAY_MS = 600;
-const TRANSIENT_STATUSES = new Set([0, 502, 503, 504]);
 
 // Returns true if we should retry once. We only retry when nothing was
 // emitted yet (no chunks, no envelope) — otherwise the user would see
@@ -79,6 +78,7 @@ async function streamChatOnce({ endpoint, body, onText, onEnvelope, onDone }) {
   const decoder = new TextDecoder();
   let buf = "";
   let finished = false;
+  let inlineError = null;     // a {type:"error"} frame from the server
   try {
     while (true) {
       const { done, value } = await reader.read();
@@ -101,10 +101,13 @@ async function streamChatOnce({ endpoint, body, onText, onEnvelope, onDone }) {
           bus.emit(EVT.ChatEnvelope, frame);
           onEnvelope && onEnvelope(frame);
         } else if (frame.type === "error") {
-          // Inline error from the server — surface but don't retry
-          // (server already decided it failed).
-          bus.emit(EVT.ChatError, frame);
-          // We still call onDone below since the stream is closing.
+          // Server-side stream error. Treat it as a failure return so the
+          // caller's fallback (non-streaming POST) can engage; if any chars
+          // were already emitted, streamChat() won't retry (charsEmitted>0)
+          // and the partial reply is kept.
+          inlineError = { code: frame.code || "server", message: frame.message || "stream error" };
+          finished = true;
+          break;
         } else if (frame.type === "done") {
           finished = true;
           break;
@@ -113,7 +116,12 @@ async function streamChatOnce({ endpoint, body, onText, onEnvelope, onDone }) {
       if (finished) break;
     }
   } catch (e) {
+    try { await reader.cancel(); } catch (_) {}     // release the socket now
     return { code: "stream_io", message: e.message };
+  }
+  if (inlineError) {
+    try { await reader.cancel(); } catch (_) {}
+    return inlineError;
   }
   bus.emit(EVT.ChatDone, null);
   onDone && onDone();

@@ -174,5 +174,3 @@ export function play(name) {
   cfg.busyUntil(dur);
   return dur;
 }
-
-export function names() { return Object.keys(REGISTRY); }

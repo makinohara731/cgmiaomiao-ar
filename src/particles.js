@@ -30,7 +30,8 @@ function spawn({ glyph, x, y, color, drift = 80, ttlMs = 1500, size = 26 }) {
   const dy = -Math.cos(angle * Math.PI / 180) * drift;
   el.style.setProperty("--dx", `${dx}px`);
   el.style.setProperty("--dy", `${dy}px`);
-  el.style.animationDuration = `${ttlMs}ms`;
+  el.style.setProperty("--ttl", `${ttlMs}ms`);   // CSS `animation: ... var(--ttl)` reads this
+
   ensureLayer().appendChild(el);
   setTimeout(() => { try { el.remove(); } catch (_) {} }, ttlMs + 50);
 }

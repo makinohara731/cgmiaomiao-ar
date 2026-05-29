@@ -1,5 +1,57 @@
 # CHANGELOG
 
+## v4.2 — Review-driven correctness pass (2026-05-29)
+
+A multi-agent review (7 dimensions, every finding adversarially verified) surfaced
+43 confirmed issues; this release fixes 39 of them (the rest were deliberate design
+— a frozen event vocabulary + doc nits). A second adversarial pass over the diff
+caught a critical regression before commit (a tap-handler teardown that swallowed
+every short tap), which is also fixed here.
+
+Critical / high:
+- **ASR was non-functional.** The worker posted inline base64 to DashScope's *async
+  file-transcription* REST path with `X-DashScope-Async: enable` — an inconsistent
+  combination that always returned an empty PENDING task, so voice input silently
+  showed "没听清". Rewired to a synchronous OpenAI-compatible ASR call
+  (`qwen3-asr-flash`, inline `input_audio`). ⚠ Needs a live-key smoke test: model
+  availability + whether the model accepts the browser's webm/opus container are
+  documented inline as residual risk; a failure now surfaces a real error instead of
+  silence.
+- **Chat clobbered itself.** Streaming/non-streaming chat never claimed
+  `life.busyUntil`, so the autonomous loop could fire `sayLine()` mid-stream —
+  wiping the streaming bubble and starting a second, overlapping TTS. Chat now owns
+  the loop for the in-flight window and releases it to a short read-tail on every
+  terminal path.
+- **Face-tracking never turned the cat (v4.1 regression).** Yaw was written to the
+  wrong `orientation` slot; restored to the proven slot order ("0deg pitch yaw").
+- **BGM self-destructed.** `startBGM`→`stopBGM(0)`'s deferred teardown read the
+  shared `bgm` object after `startBGM` had installed the new nodes, stopping the new
+  track. `stopBGM` now snapshots its nodes to locals first.
+
+Medium:
+- Inline SSE error frames now trigger the non-streaming fallback instead of leaving
+  the cat saying "喵？".
+- A quick orbit-drag no longer falls through to a stray pet/look on release.
+- Composites & one-shot user actions wake the cat instead of fighting the sleep loop.
+- `mem.topics` ("最近聊过…" recall) is now actually populated from chat turns
+  (was read but never written — permanently dead).
+- The "今天的心情" diary entry is gated to once per local day (was re-appended on
+  every visibilitychange).
+- Init is idempotent with a cached-GLB fast path + a degraded-mode safety-net, so the
+  life engine comes up even if the model-load event is missed.
+
+Low / nit (selected): `\uXXXX` escapes no longer leak hex digits into the streamed
+bubble; SSE `[DONE]` stops the outer loop and releases the upstream reader; client
+SSE retry cancels the abandoned reader; affection deltas crossing two bond bands no
+longer skip the lower stage's unlock; bond-event dialogue chain is now cancelable;
+`playAnim` caches the anim buttons instead of two whole-document queries per call;
+the behavior loop pauses while the tab is hidden; mic-meter RAF is guarded against
+double-start; "days together" uses calendar-day math; worker logs 403/429; ASR
+base64 is chunked; `parseChatReply`'s fallback regex is derived from `ANIMATIONS`
+(no longer drops `eat`); particle duration flows through `--ttl`; dead code removed
+(`spontaneousThought`, `getAudioCtx`, `composites.names`, persona over-exports,
+forbidden `Connection` SSE header).
+
 ## v4.1 — Deeper AR + reactive interactions (2026-05-29)
 
 A follow-up pass on top of v4. Same architecture, more behaviour.
