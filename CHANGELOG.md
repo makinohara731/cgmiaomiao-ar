@@ -36,6 +36,14 @@ with its own little routines between moves instead of standing still.
 fails to load; `flashExpression` shows them transiently then eases back to the
 neutral face.
 
+**Livelier existing clips.** The 17 originals were already richly keyframed, so
+this is an energy pass, not a rewrite (the real stiffness ceiling is the rigid
+stub-rig — glTF drops bone scale, so no squash/stretch). Amplitude bumps on the
+most-seen clips: idle breath 9→11cm, head bobble 5→7°, tail rubber-wave
+~+33%, weight-shift 2.5→4°; walk waddle 5→7° + bigger tail + head bob 3→4.5°;
+happy sway 9→12°, head-tilt 11→14°, butt-bounce + arm-wiggle up. Same curve
+shapes, more life.
+
 ## v4.2 — Review-driven correctness pass (2026-05-29)
 
 A multi-agent review (7 dimensions, every finding adversarially verified) surfaced
