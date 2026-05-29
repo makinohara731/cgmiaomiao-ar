@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## v5.1 — AR actually works on phones (2026-05-29)
+
+A multi-agent diagnosis of "tapped AR, saw nothing" found two definite bugs that
+broke native AR on *both* phone platforms (the in-page viewer looked fine, so it
+read like a model-viewer bug — but the failure was on the AR handoff):
+
+- **Android Scene Viewer refused the model.** The GLB exported textures as WebP,
+  which Blender marks as a *required* glTF extension (`EXT_texture_webp`); Scene
+  Viewer doesn't implement it and rejects the whole asset. Fixed by exporting
+  `AUTO` textures (jpg/png) instead — Draco mesh compression stays (Scene Viewer
+  supports it). GLB regenerated.
+- **iOS Quick Look had no USDZ to open.** `ar-modes` listed `quick-look` but the
+  `<model-viewer>` had no `ios-src`. Added `ios-src="character_v2.usdz"` (the usdz
+  was already deployed, just never referenced).
+- **Camera mode (📸) gave a misleading error on phones over plain http.**
+  `navigator.mediaDevices` is undefined on insecure origins, so the old code said
+  "此设备不支持摄像头". Now it checks `window.isSecureContext` and says
+  "请用 https 网址打开", and distinguishes a denied permission from no-camera.
+
+Desktop behaviour was already correct (no room-AR on a PC → the green "手机看AR"
+button opens a QR to continue on a phone; the 📸 button overlays the cat on the
+desktop webcam).
+
 ## v5 — 5 new GLB clips + livelier idle (2026-05-29)
 
 New baked animations (authored in animate_v2.py, exported in ACTIONS mode →

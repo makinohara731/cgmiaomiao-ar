@@ -1996,8 +1996,12 @@ let camMode = false;
 let camFacing = "environment";   // "environment" (rear) or "user" (front)
 
 async function enterCamMode() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showStatus("此设备不支持摄像头", 2400);
+  // navigator.mediaDevices is undefined on insecure origins — which is the
+  // usual reason "📸 does nothing" on a phone opened via http://<LAN-IP>:8765.
+  // localhost/https are secure; a bare LAN IP over http is not.
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (!window.isSecureContext) showStatus("请用 https 网址打开才能开摄像头喵～", 3200);
+    else showStatus("此设备不支持摄像头", 2400);
     return;
   }
   try {
@@ -2005,7 +2009,11 @@ async function enterCamMode() {
       video: { facingMode: { ideal: camFacing } }, audio: false,
     });
   } catch (e) {
-    showStatus("打不开摄像头，请允许相机权限", 2800);
+    // Distinguish "denied" from "no camera present" so the hint is accurate.
+    const msg = e && e.name === "NotFoundError"
+      ? "没找到摄像头喵…"
+      : "要允许相机权限，喵喵才能出现在你身边哦";
+    showStatus(msg, 3200);
     return;
   }
   camFeed.srcObject = camStream;
