@@ -42,7 +42,12 @@ stub-rig — glTF drops bone scale, so no squash/stretch). Amplitude bumps on th
 most-seen clips: idle breath 9→11cm, head bobble 5→7°, tail rubber-wave
 ~+33%, weight-shift 2.5→4°; walk waddle 5→7° + bigger tail + head bob 3→4.5°;
 happy sway 9→12°, head-tilt 11→14°, butt-bounce + arm-wiggle up. Same curve
-shapes, more life.
+shapes, more life. Second pass energized the constantly-played ambient clips:
+lookaround head-sweep 28→34° + bigger tail, sniff lean/dip/tail up ~30%,
+stretch deeper arch + taller proud tail. And the autonomous cadence tightened
+(awake gap 3.2–8s → 2.2–5.8s) so the cat performs its little routines more
+often — the single biggest "更生动" lever, since the idle loop is what plays
+most of the time.
 
 ## v4.2 — Review-driven correctness pass (2026-05-29)
 

@@ -572,7 +572,7 @@ function scheduleBehavior() {
   clearTimeout(behaviorTimer);
   const delay = life.asleep
     ? 10000 + Math.random() * 11000   // asleep → long, lazy gaps
-    : 3200  + Math.random() * 4800;   // awake  → lively cadence
+    : 2200  + Math.random() * 3600;   // awake  → snappier cadence (v5: was 3.2-8s → 2.2-5.8s; cat acts more often)
   behaviorTimer = setTimeout(runBehavior, delay);
 }
 
