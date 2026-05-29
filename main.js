@@ -754,6 +754,7 @@ function seekCare(need) {
       "喵～你都不理我，哼！",
       "我们来玩点什么好不好？",
     ]));
+    flashExpression("cry", 1900);          // 委屈含泪 when neglected
     playAnim(pickFrom(["happy", "jump", "spin"]));
   } else if (need === "energy") {
     emote("🥱");
@@ -917,6 +918,7 @@ function askQuestion() {
     life.busyUntil = Date.now() + 500;
     emote("…");
     sayLine("…你不理我，哼。");
+    flashExpression("cry", 2000);          // sulky teary eyes when ignored
     addAffection(-1);
   }, 22000);
 }
@@ -1073,6 +1075,7 @@ function triggerBondEvent(stage) {
   }
   life.busyUntil = Date.now() + ev.lines.length * 3400 + 2000;
   showStatus(`✨ 羁绊加深 —— ${stage.name}`, 4200);
+  flashExpression("love", 2600);            // heart eyes at the bond moment
   if (ev.anim && (modelViewer.availableAnimations || []).includes(ev.anim)) {
     playAnim(ev.anim);
   }
@@ -1270,7 +1273,7 @@ function petCat() {
   if (life.petStreak >= 3) {
     // showered with attention → delighted; 10+ streak gets the long purr
     emote(pickFrom(["❤️", "💕", "✨"]));
-    if (life.petStreak >= 10) playPurrLong();
+    if (life.petStreak >= 10) { playPurrLong(); flashExpression("love", 2200); }
     else                       playPurr();
     sayLine(pickFrom(["呼噜呼噜～最喜欢你了！", "嘿嘿，好舒服喵～", "再多摸一会儿嘛～"]));
     life.mood = clamp01(life.mood + 0.18);
@@ -1471,6 +1474,7 @@ bus.on(EVT.BondUnlock, () => {
 // keeps its eyes shut while it sleeps.
 // =====================================================================
 let eyesOpenTex = null, eyesClosedTex = null, eyesHappyTex = null, eyesSadTex = null;
+let eyesSurpriseTex = null, eyesLoveTex = null, eyesCryTex = null;   // v5 expressions
 let headTexInfo = null;
 let currentExpression = "open";     // open / blink / happy / sad
 let blinkReady = false;
@@ -1488,6 +1492,10 @@ async function initBlink() {
     // happy + sad load best-effort; if either fails the runtime degrades gracefully
     try { eyesHappyTex = await modelViewer.createTexture("textures/face_happy.webp"); } catch (_) {}
     try { eyesSadTex   = await modelViewer.createTexture("textures/face_sad.webp"); }   catch (_) {}
+    // v5 expressions — best-effort; setExpression falls back if any failed to load
+    try { eyesSurpriseTex = await modelViewer.createTexture("textures/face_surprise.webp"); } catch (_) {}
+    try { eyesLoveTex     = await modelViewer.createTexture("textures/face_love.webp"); }     catch (_) {}
+    try { eyesCryTex      = await modelViewer.createTexture("textures/face_cry.webp"); }      catch (_) {}
     blinkReady = true;
     if (life.asleep) setExpression("blink");
     scheduleBlink();
@@ -1501,9 +1509,12 @@ async function initBlink() {
 function setExpression(name) {
   if (!blinkReady || name === currentExpression) return;
   let tex = eyesOpenTex;
-  if      (name === "blink") tex = eyesClosedTex;
-  else if (name === "happy") tex = eyesHappyTex || eyesClosedTex;   // fallback to blink
-  else if (name === "sad")   tex = eyesSadTex   || eyesOpenTex;     // fallback to open
+  if      (name === "blink")    tex = eyesClosedTex;
+  else if (name === "happy")    tex = eyesHappyTex || eyesClosedTex;   // fallback to blink
+  else if (name === "sad")      tex = eyesSadTex   || eyesOpenTex;     // fallback to open
+  else if (name === "surprise") tex = eyesSurpriseTex || eyesOpenTex;
+  else if (name === "love")     tex = eyesLoveTex     || eyesHappyTex || eyesOpenTex;
+  else if (name === "cry")      tex = eyesCryTex      || eyesSadTex   || eyesOpenTex;
   try {
     headTexInfo.setTexture(tex);
     currentExpression = name;
@@ -1672,6 +1683,7 @@ function handleMotion(event) {
     life.busyUntil = Date.now() + 1500;
     emote("💫");
     playAnim(reaction);
+    flashExpression("surprise", 1500);     // startled wide eyes
   }
 }
 
@@ -2189,6 +2201,7 @@ function handleFace(result) {
       life.mood = clamp01(life.mood + 0.12);
       emote("❤️");
       playAnim("happy");
+      flashExpression("love", 2200);        // heart eyes when you smile at it
       sayLine(pickFrom(["你笑起来真好看喵～", "看到你笑我也好开心！", "嘿嘿，对着我笑啦～"]));
     }
   }
@@ -2260,6 +2273,7 @@ function reactToVolume(peak) {
     emote("💥");
     playAnim("hurt");
     playHurt();
+    flashExpression("surprise", 1600);     // wide-eyed at the shout
     setTimeout(() => sayLine("好大声…吓我一跳喵！"), 600);
   } else if (peak > 0 && peak < 0.06) {
     // Whisper — cat leans in
