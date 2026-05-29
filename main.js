@@ -69,6 +69,9 @@ const CLIPS = {
   backflip:{loop:false}, twirl:{loop:false},
   lookaround:{loop:false}, groom:{loop:false},
   stretch:{loop:false},    sniff:{loop:false},   eat:{loop:false},
+  // v5 new clips (authored in animate_v2.py)
+  headtilt:{loop:false}, sit:{loop:false}, lickpaw:{loop:false},
+  pounce:{loop:false},   playbow:{loop:false},
 };
 const isLoopClip = (n) => !!(CLIPS[n] && CLIPS[n].loop);
 
@@ -93,6 +96,12 @@ const VOICE_MAP = [
   { kw: /撞撞|顶顶|蹭头|蹭蹭/,             composite: "headbutt" },
   { kw: /挠挠|抓抓|痒痒/,                  composite: "scratch" },
   { kw: /装死|倒下|装睡|演戏/,             composite: "playdead" },
+  // v5 atomic clips — lickpaw before the generic 舔→groom so 舔爪 wins
+  { kw: /歪头|歪歪头|偏头|歪一下/,         anim: "headtilt" },
+  { kw: /坐下|坐好|坐一下|乖乖坐/,         anim: "sit" },
+  { kw: /舔爪|舔手|洗爪|舔舔/,             anim: "lickpaw" },
+  { kw: /扑|扑过来|扑上来|猛扑/,           anim: "pounce" },
+  { kw: /作揖|趴下|想玩|一起玩|邀请/,      anim: "playbow" },
   { kw: /走|行走|散步|过来/,            anim: "walk" },
   { kw: /跑|奔跑|快点|加速/,            anim: "run" },
   { kw: /打|攻击|揍|出拳|咬/,           anim: "attack" },
@@ -440,6 +449,7 @@ const EMOTE_FOR = {
   lookaround: "❓", groom: "🧼", stretch: "🙆", sniff: "👃",
   happy: "❤️", spin: "✨", jump: "⤴️", wave: "👋",
   walk: "🐾", run: "💨", attack: "💢", hurt: "💧",
+  headtilt: "❓", sit: "·ω·", lickpaw: "🧼", pounce: "💢", playbow: "🎈",
 };
 
 // ---- Hand-drawn emote icons — a cohesive custom set so the mood cues
@@ -617,11 +627,13 @@ function runBehavior() {
   }
 
   const pool = [
-    ["lookaround", 28 * pm.calm], ["groom", 20 * pm.calm], ["sniff", 15],
-    ["stretch", 11 * pm.calm], ["nothing", 11],
+    ["lookaround", 26 * pm.calm], ["groom", 16 * pm.calm], ["sniff", 13],
+    ["stretch", 10 * pm.calm], ["nothing", 10],
+    // v5 ambient variety — the cat looks busier between moves
+    ["headtilt", 14 * pm.calm], ["lickpaw", 12 * pm.calm], ["sit", 8 * pm.calm],
   ];
-  if (life.mood > 0.62 && life.energy > 0.5) pool.push(["happy", 12 * pm.lively], ["spin", 6 * pm.lively]);
-  if (life.energy > 0.72)                    pool.push(["jump",  6 * pm.lively]);
+  if (life.mood > 0.62 && life.energy > 0.5) pool.push(["happy", 12 * pm.lively], ["spin", 6 * pm.lively], ["playbow", 6 * pm.lively]);
+  if (life.energy > 0.72)                    pool.push(["jump",  6 * pm.lively], ["pounce", 6 * pm.lively]);
 
   const pick = weightedPick(pool);
   if (pick === "nothing") {

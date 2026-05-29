@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## v5 — 5 new GLB clips + livelier idle (2026-05-29)
+
+New baked animations (authored in animate_v2.py, exported in ACTIONS mode →
+22 clips total, GLB still 0.51 MB with Draco + WebP):
+
+- **headtilt** 🤨 — the curious "?" head-cock (anticipation pre-dip → big tilt
+  → hold → return), with near-ear perk + slow tail.
+- **sit** 🪑 — settles onto haunches (legs fold, body lowers, tail curls round),
+  holds at the end.
+- **lickpaw** 👅 — raises a paw to the face and does a few lick-bobs, then lowers.
+- **pounce** 🐯 — stalk-crouch with the iconic butt-wiggle, then springs forward
+  and lands.
+- **playbow** 🙇 — the universal front-down "let's play" bow, holds the invite,
+  pops back up with a little hop.
+
+All five read clearly despite the rigid stub-rig (verified via Blender renders
++ in-browser model-viewer playback). Wired into CLIPS, EMOTE_FOR, VOICE_MAP
+(歪头 / 坐下 / 舔爪 / 扑 / 作揖, with lickpaw ahead of the generic 舔→groom), and
+the anim bar. The autonomous idle pool now draws headtilt / lickpaw / sit as
+calm micro-actions and pounce / playbow when energetic, so the cat looks busy
+with its own little routines between moves instead of standing still.
+
 ## v4.2 — Review-driven correctness pass (2026-05-29)
 
 A multi-agent review (7 dimensions, every finding adversarially verified) surfaced
