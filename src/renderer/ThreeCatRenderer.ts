@@ -3,17 +3,22 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 /**
- * ThreeCatRenderer — the three.js backend for CatRenderer (P2.1).
+ * ThreeCatRenderer — the three.js backend for CatRenderer.
  *
  * Same seam as ModelViewerRenderer: every clip call funnels through the
  * CatRenderer interface, so callers (playAnim et al.) don't know or care which
- * backend is live. This phase implements ANIMATION ONLY — load the Draco GLB,
- * play its 22 clips via an AnimationMixer with cross-fades, one-shots clamping
- * on their last frame. Orientation, facial-texture swaps, the load/error
- * lifecycle, mouse-orbit, ground shadow, and the MindAR anchor land in
- * P2.2–P2.4 (see docs/进度.md).
+ * backend is live.
+ *
+ * P2.1 — animation: load the Draco GLB, play its 22 clips via an AnimationMixer
+ * with cross-fades, one-shots clamping on their last frame.
+ * P2.2 — runs as the main view: a self-driven full-window scene with neutral
+ * lighting and mouse-orbit (OrbitControls), mounted by RendererFactory behind
+ * the ?renderer=three flag while model-viewer stays the default.
+ * Still deferred to P2.4: orientation (face-toward), facial-texture swaps, the
+ * ground shadow, pointer-petting, and the MindAR anchor (see docs/进度.md).
  *
  * The GLB requires KHR_draco_mesh_compression, so a DRACOLoader is mandatory;
  * its decoder ships in public/draco/ (served at BASE_URL + "draco/") so the app
@@ -36,6 +41,8 @@ export interface ThreeCatRendererOpts {
   dracoPath?: string;
   /** Extra WebGL context attributes (e.g. preserveDrawingBuffer for screenshots). */
   glAttributes?: Partial<WebGLContextAttributes>;
+  /** Mouse-orbit (OrbitControls). Default true; AR mode will pass false later. */
+  enableControls?: boolean;
   /** Called once the model + clips are ready. */
   onReady?: () => void;
   /** Called if the GLB fails to load. */
@@ -52,6 +59,9 @@ export class ThreeCatRenderer implements CatRenderer {
   private readonly actions = new Map<string, THREE.AnimationAction>();
   private currentAction: THREE.AnimationAction | null = null;
   private root: THREE.Object3D | null = null;
+  private controls: OrbitControls | null = null;
+  private readonly target = new THREE.Vector3();
+  private readonly enableControls: boolean;
   private ready = false;
   private rafId = 0;
   private readonly onResize = () => this.resize();
@@ -60,6 +70,7 @@ export class ThreeCatRenderer implements CatRenderer {
     private readonly canvas: HTMLCanvasElement,
     opts: ThreeCatRendererOpts = {}
   ) {
+    this.enableControls = opts.enableControls !== false;
     const base = (import.meta as any).env?.BASE_URL ?? "/";
     const src = opts.src ?? base + "character_v2.glb";
     const dracoPath = opts.dracoPath ?? base + "draco/";
@@ -176,6 +187,7 @@ export class ThreeCatRenderer implements CatRenderer {
     }
 
     this.frameTo(root);
+    this.setupControls();
     this.ready = true;
 
     // Default to the idle loop if present, like the model-viewer autoplay.
@@ -206,6 +218,23 @@ export class ThreeCatRenderer implements CatRenderer {
     );
     this.camera.lookAt(center);
     this.camera.updateProjectionMatrix();
+    this.target.copy(center);
+  }
+
+  /** Mouse-orbit around the cat — the three.js equivalent of model-viewer's
+   *  `camera-controls`. Orbit + zoom only (no pan), gently damped. */
+  private setupControls(): void {
+    if (!this.enableControls) return;
+    const c = new OrbitControls(this.camera, this.canvas);
+    c.target.copy(this.target);
+    c.enablePan = false;
+    c.enableDamping = true;
+    c.dampingFactor = 0.08;
+    const dist = this.camera.position.distanceTo(this.target);
+    c.minDistance = dist * 0.55;
+    c.maxDistance = dist * 2.2;
+    c.update();
+    this.controls = c;
   }
 
   private aspect(): number {
@@ -229,6 +258,7 @@ export class ThreeCatRenderer implements CatRenderer {
       // Clamp so a backgrounded tab (huge accumulated delta) doesn't jump clips.
       const dt = Math.min(this.clock.getDelta(), 0.1);
       if (this.mixer) this.mixer.update(dt);
+      this.controls?.update();
       this.renderer.render(this.scene, this.camera);
     };
     this.rafId = requestAnimationFrame(tick);
@@ -240,6 +270,8 @@ export class ThreeCatRenderer implements CatRenderer {
     this.rafId = 0;
     this.ready = false;
     window.removeEventListener("resize", this.onResize);
+    this.controls?.dispose();
+    this.controls = null;
     this.mixer?.stopAllAction();
     if (this.root) {
       this.mixer?.uncacheRoot(this.root);

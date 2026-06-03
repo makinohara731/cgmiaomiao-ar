@@ -20,7 +20,7 @@ import { streamChat } from "./src/chat-stream";
 import * as particles from "./src/particles";
 import * as composites from "./src/composites";
 import * as hints from "./src/hints";
-import { ModelViewerRenderer } from "./src/renderer/ModelViewerRenderer";
+import { createRenderer } from "./src/renderer/RendererFactory";
 import { CatStateMachine } from "./src/anim/CatState";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
@@ -127,9 +127,22 @@ const VOICE_MAP = [
 // =====================================================================
 const $ = (sel) => document.querySelector(sel);
 const modelViewer = $("#catModel");
-// Animation playback funnels through this renderer so the model-viewer backend
-// can be swapped for three.js in P2 without touching callers (see CatRenderer).
-const renderer = new ModelViewerRenderer(modelViewer);
+const catCanvas = $("#catCanvas");
+// Pick the renderer backend (model-viewer by default; three.js via
+// ?renderer=three) and wire the DOM. Animation funnels through the returned
+// CatRenderer so callers (playAnim et al.) stay backend-agnostic. The three.js
+// path drives the app's load lifecycle via onReady → onModelLoaded (idempotent);
+// model-viewer keeps driving it from its own `load` event.
+const { renderer, backend: rendererBackend } = createRenderer({
+  modelViewer,
+  canvas: catCanvas,
+  onReady: onModelLoaded,
+  onError: () => {
+    if (loaderEl) loaderEl.classList.add("hidden");
+    showStatus("模型加载失败，请刷新重试", 4000);
+  },
+});
+document.body.classList.add("renderer-" + rendererBackend);
 const animBar   = $("#animBar");
 const micBtn    = $("#micBtn");
 const chatBtn   = $("#chatBtn");

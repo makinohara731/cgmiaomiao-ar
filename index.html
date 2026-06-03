@@ -181,6 +181,11 @@
     </button>
   </model-viewer>
 
+  <!-- three.js renderer canvas (P2.2) — the unified renderer. Hidden by default;
+       RendererFactory reveals it and hides the model-viewer above when the
+       three backend is selected (?renderer=three). -->
+  <canvas id="catCanvas" class="renderer-hidden"></canvas>
+
   <!-- Animation buttons (bottom) -->
   <div id="animBar" class="anim-bar">
     <button class="anim-btn active" data-anim="idle"  title="待机">😺<span>待机</span></button>
