@@ -181,6 +181,8 @@ export class StoryEngine {
 
   private runBeat(beat: Beat, life: LifeView): void {
     if (!this.hooks) return;
+    this.hooks.busy(5000); // hold the autonomous loop while the beat plays (choice
+    // beats extend this themselves via ctx.hooks.busy before showing choices)
     const ctx: BeatCtx = {
       hooks: this.hooks,
       state: this.state,

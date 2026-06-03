@@ -427,6 +427,7 @@ function dailyRoll() {
   }
   const pick = pickFrom(DAILY_THEMES);
   Object.assign(daily, { ymd: today, theme: pick.theme, moodBias: pick.moodBias });
+  story.onDailyRoll(daily.theme); // P4: let the story layer read today's theme
   try { localStorage.setItem(DAILY_KEY, JSON.stringify(daily)); } catch (_) {}
   // Apply mood bias once per day (after the time-away decay in loadLife).
   life.mood = clamp01(life.mood + pick.moodBias);
@@ -745,6 +746,7 @@ function stageOf(a) {
 function addAffection(delta) {
   const prev = life.affection;
   life.affection = Math.max(0, Math.min(100, prev + delta));
+  story.onAffection(prev, life.affection); // P4: recompute route + sync endings
   if (delta > 0) {
     // Fire a bond event for EVERY stage boundary crossed, ascending. A big
     // jump (e.g. 14 → 40) crosses two bands; the old code only fired the
@@ -874,6 +876,11 @@ function proactiveSpeak() {
     }
     return;
   }
+
+  // P4: give a story beat first dibs on this ambient turn. The engine only fires
+  // when idle + no choices open (re-entrancy guard); if one runs, count the
+  // throttle and skip the random monologue.
+  if (story.maybeBeat("proactive")) { markProactive(); return; }
 
   let line = null;
   const stage = stageOf(life.affection).name;
@@ -1091,6 +1098,7 @@ function triggerBondEvent(stage) {
     grantUnlock(u.key);
     showStatus(`🎁 解锁 —— ${u.label}`, 4500);
   }
+  story.onBondStage(stage.name); // P4: record stage + sync endings (sees the just-granted unlock)
   catState.enter("dialogue", ev.lines.length * 3400 + 2000);
   showStatus(`✨ 羁绊加深 —— ${stage.name}`, 4200);
   flashExpression("love", 2600);            // heart eyes at the bond moment
