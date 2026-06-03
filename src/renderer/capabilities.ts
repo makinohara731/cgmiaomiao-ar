@@ -19,6 +19,10 @@ export interface Caps {
    * Quick Look AR; the desktop AR path is MindAR on three.js (P2.3).
    */
   mobile: boolean;
+  /** `navigator.mediaDevices.getUserMedia` exists — a camera can be requested. */
+  camera: boolean;
+  /** Secure context (https / localhost) — required for getUserMedia. */
+  secureContext: boolean;
 }
 
 function detectWebGL(): boolean {
@@ -46,8 +50,39 @@ function detectMobile(): boolean {
   }
 }
 
+function detectCamera(): boolean {
+  try {
+    return typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
+  } catch {
+    return false;
+  }
+}
+
+function detectSecure(): boolean {
+  try {
+    return typeof window !== "undefined" && window.isSecureContext === true;
+  } catch {
+    return false;
+  }
+}
+
 export function detectCaps(): Caps {
-  return { webgl: detectWebGL(), mobile: detectMobile() };
+  return {
+    webgl: detectWebGL(),
+    mobile: detectMobile(),
+    camera: detectCamera(),
+    secureContext: detectSecure(),
+  };
+}
+
+/**
+ * Whether the desktop MindAR image-target AR path can run: needs WebGL (three.js),
+ * a camera, and a secure context (getUserMedia is blocked on bare-LAN http — the
+ * v3 gotcha). The actual camera *permission* is still requested at enter-AR time;
+ * this only gates whether to offer/auto-enter AR vs the fallback 3D view.
+ */
+export function canActivateAR(caps: Caps = detectCaps()): boolean {
+  return caps.webgl && caps.camera && caps.secureContext;
 }
 
 function urlPick(): string | null {
