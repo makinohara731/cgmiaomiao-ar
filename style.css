@@ -596,7 +596,9 @@ body.time-dusk #envSun { opacity: .6; filter: drop-shadow(0 0 12px rgba(255, 130
 
 /* === Dialogue choice buttons (GalGame-style) === */
 .choices {
-  position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%);
+  /* Sit ABOVE the VN dialogue box (bottom:84px, ~64-96px tall) so the question
+     stays readable while choosing. */
+  position: fixed; left: 50%; bottom: 186px; transform: translateX(-50%);
   display: flex; flex-direction: column; gap: 8px;
   width: min(86vw, 360px); z-index: 18;
 }

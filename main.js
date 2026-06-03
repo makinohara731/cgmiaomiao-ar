@@ -25,6 +25,7 @@ import { canActivateAR } from "./src/renderer/capabilities";
 import { MindArSession } from "./src/ar/MindArSession";
 import { CatStateMachine } from "./src/anim/CatState";
 import { DialogueBox } from "./src/vn/DialogueBox";
+import { Choices } from "./src/vn/Choices";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -175,6 +176,9 @@ const bondStageEl   = $("#bondStage");
 const statusPanelEl = $("#statusPanel");
 const spCloseBtn    = $("#spClose");
 const choicesEl     = $("#choices");
+// Reusable "show options / on pick" surface (P3.2) — owns #choices.
+const choices = new Choices(choicesEl);
+if (import.meta.env && import.meta.env.DEV) window.__choices = choices;
 const cfgPanelEl    = $("#cfgPanel");
 const cfgCloseBtn   = $("#cfgClose");
 const spOpenCfgBtn  = $("#spOpenCfg");
@@ -901,7 +905,6 @@ function proactiveSpeak() {
 
 // ---- Dialogue choices — the cat asks, you pick, the bond shifts ----
 let lastQuestionAt = 0;
-let questionTimer = null;
 
 const QUESTIONS = [
   { q: "今天…你是特意来看我的吗？", opts: [
@@ -931,33 +934,25 @@ function askQuestion() {
   emote("❓");
   sayLine(q.q);
   catState.enter("dialogue", 60000);            // hold while waiting for the player
-  choicesEl.innerHTML = "";
-  q.opts.forEach((opt) => {
-    const b = document.createElement("button");
-    b.className = "choice-btn";
-    b.textContent = opt.t;
-    b.addEventListener("click", () => answerQuestion(opt), { once: true });
-    choicesEl.appendChild(b);
-  });
-  choicesEl.classList.remove("hidden");
-  clearTimeout(questionTimer);
-  questionTimer = setTimeout(() => {            // ignored for too long
-    if (choicesEl.classList.contains("hidden")) return;
-    choicesEl.classList.add("hidden");
-    choicesEl.innerHTML = "";
-    catState.hold(500);
-    emote("…");
-    sayLine("…你不理我，哼。");
-    flashExpression("cry", 2000);          // sulky teary eyes when ignored
-    addAffection(-1);
-  }, 22000);
+  // Each option carries its label + payload (aff/anim/reply) straight to answerQuestion.
+  choices.show(
+    q.opts.map((o) => Object.assign({ label: o.t }, o)),
+    (opt) => answerQuestion(opt),
+    {
+      timeoutMs: 22000,
+      onTimeout: () => {                         // ignored for too long
+        catState.hold(500);
+        emote("…");
+        sayLine("…你不理我，哼。");
+        flashExpression("cry", 2000);            // sulky teary eyes when ignored
+        addAffection(-1);
+      },
+    }
+  );
 }
 
 function answerQuestion(opt) {
-  clearTimeout(questionTimer);
-  choicesEl.classList.add("hidden");
-  choicesEl.innerHTML = "";
-  catState.enter("oneshot", 2000);
+  catState.enter("oneshot", 2000);               // (Choices already hid + cleared the timeout)
   life.lastInteract = Date.now();
   addAffection(opt.aff);
   if (opt.aff > 0) life.mood = clamp01(life.mood + 0.1);
@@ -1050,37 +1045,26 @@ function maybeWriteDream() {
 }
 
 function openNicknameDialog() {
-  // Reuses the existing choices UI as a single-shot input flow.
   if (!choicesEl) return;
   emote("✨");
   sayLine("我想给你一个专属的称呼～你想让我叫你什么呢？");
   catState.enter("dialogue", 60000);
-  choicesEl.innerHTML = "";
-  const input = document.createElement("input");
-  input.type = "text";
-  input.maxLength = 6;
-  input.placeholder = "想被我怎么叫～";
-  input.className = "choice-input";
-  const submit = document.createElement("button");
-  submit.className = "choice-btn";
-  submit.textContent = "就这样叫我吧";
-  submit.addEventListener("click", () => {
-    const n = sanitizeName(input.value || "");
-    if (n) {
-      life.userName = n;
-      saveLife();
-      sayLine(`${n}！这下就是我们之间的小秘密啦～`);
-      emote("❤️");
-      writeDiary(`从今天起我会叫 ta「${n}」`, "bond");
-    } else {
-      sayLine("嗯…那我先这样叫你吧～");
+  choices.showInput(
+    { placeholder: "想被我怎么叫～", maxLength: 6, submitLabel: "就这样叫我吧" },
+    (value) => {
+      const n = sanitizeName(value || "");
+      if (n) {
+        life.userName = n;
+        saveLife();
+        sayLine(`${n}！这下就是我们之间的小秘密啦～`);
+        emote("❤️");
+        writeDiary(`从今天起我会叫 ta「${n}」`, "bond");
+      } else {
+        sayLine("嗯…那我先这样叫你吧～");
+      }
+      catState.hold(1200);
     }
-    choicesEl.classList.add("hidden");
-    catState.hold(1200);
-  }, { once: true });
-  choicesEl.appendChild(input);
-  choicesEl.appendChild(submit);
-  choicesEl.classList.remove("hidden");
+  );
 }
 
 // Pending timers for the in-flight bond-event dialogue chain. Cleared at the
