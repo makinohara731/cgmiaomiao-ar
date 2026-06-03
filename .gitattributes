@@ -1,0 +1,7 @@
+# Vendored runtime bundles — keep verbatim, no EOL conversion.
+public/vendor/** -text
+
+# AR / 3D binary assets — never EOL-convert (CRLF would corrupt them).
+*.mind binary
+*.glb binary
+*.usdz binary
