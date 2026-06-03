@@ -26,6 +26,7 @@ import { MindArSession } from "./src/ar/MindArSession";
 import { CatStateMachine } from "./src/anim/CatState";
 import { DialogueBox } from "./src/vn/DialogueBox";
 import { Choices } from "./src/vn/Choices";
+import { story } from "./src/story/StoryEngine";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -1585,6 +1586,32 @@ composites.configure({
   busyUntil: (ms) => { catState.enter("composite", ms); },
 });
 
+// Story layer (P4) — inject the real host fns (mirrors audio/composites.configure)
+// so the engine never imports back into main.js. It only RECORDS route/endings on
+// soul-layer changes; beats play on safe idle turns. story.load() runs later, after
+// loadLife() (in onModelLoaded), so it sees restored affection/unlocks/daily theme.
+story.configure({
+  life: () => ({
+    affection: life.affection,
+    stage: stageOf(life.affection).name,
+    catName: catNameDisplay(),
+    userName: life.userName || "",
+    hasUnlock,
+    seenEvent: (n) => Array.isArray(life.seenEvents) && life.seenEvents.includes(n),
+    dailyTheme: daily.theme || "",
+  }),
+  sayLine,
+  emote,
+  playAnim,
+  flashExpression,
+  choices,
+  busy: (ms) => catState.enter("dialogue", ms),
+  isBusy: () => catState.isBusy(),
+  writeDiary,
+  addAffection,
+});
+if (import.meta.env && import.meta.env.DEV) window.__story = story; // headless P4 checks
+
 
 // =====================================================================
 // Voice — the sprite speaks its replies aloud. Browser SpeechSynthesis,
@@ -1742,6 +1769,7 @@ function persistAll() {
   saveLife();
   saveMem();
   saveDiary();
+  story.save();       // P4: persist story state alongside the other keys
   // Write the "today's vibe" diary line at most ONCE per local day, gated by
   // a flag on the daily blob. The writeDiary adjacency-dedupe alone fails
   // when feed/bond/dream entries land between two visibilitychange events,
@@ -1881,6 +1909,7 @@ function onModelLoaded() {
   loadDiary();       // restore the diary
   dailyRoll();       // pick today's mood theme (idempotent within a day)
   applyUnlocksOnLoad(); // re-reveal any unlocked keepsakes (e.g. forever badge)
+  story.load();      // P4: load story state + sync route/endings vs restored life
   refreshHud();      // show the restored relationship stage on the HUD
   initBlink();       // load the closed-eye texture, start the blink loop
   setupDesktopAR();  // desktop has no camera-AR — offer a scan-to-phone QR
