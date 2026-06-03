@@ -21,6 +21,7 @@ import * as particles from "./src/particles";
 import * as composites from "./src/composites";
 import * as hints from "./src/hints";
 import { ModelViewerRenderer } from "./src/renderer/ModelViewerRenderer";
+import { CatStateMachine } from "./src/anim/CatState";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -176,7 +177,6 @@ const life = {
   mood:   0.65,        // 0..1 — drains when bored, restored by play/affection
   hunger: 0.8,         // 0..1 — 1 is full; drains over time, restored by feeding
   asleep: false,       // dozing — base loop becomes "sleep"
-  busyUntil: 0,        // suppresses autonomous behaviour after a user action
   lastInteract: Date.now(),
   petStreak: 0,        // consecutive taps inside the streak window
   petTimer: null,
@@ -188,6 +188,12 @@ const life = {
   userName: "",        // the name the user chose to be called (unlocked at bond stage 3)
   unlocks: [],         // tangible rewards unlocked at each bond stage
 };
+
+// The cat's behavioural state machine — the single owner of "is the cat busy?"
+// (was the scattered `life.busyUntil`). Every action claims it by name
+// (oneshot / composite / dialogue / react / chat); the autonomous loop asks it
+// `isBusy()` instead of reading a raw timestamp. See src/anim/CatState.ts.
+const catState = new CatStateMachine();
 
 // What we show / send to the LLM when the cat doesn't have a custom name yet.
 const DEFAULT_CAT_NAME = "喵喵";
@@ -533,9 +539,9 @@ function userPlay(name) {
   if (name === "sleep") life.asleep = true;
   else wakeForUser();                     // any other explicit action wakes the cat
   emote(EMOTE_FOR[name] || "");
-  life.busyUntil = Date.now() + 1600;
+  catState.enter("oneshot", 1600);
   playAnim(name).then(() => {
-    life.busyUntil = Date.now() + renderer.currentDuration() * 1000 + 400;
+    catState.hold(renderer.currentDuration() * 1000 + 400);
   });
 }
 
@@ -582,7 +588,7 @@ function runBehavior() {
 
   const now = Date.now();
   // never interrupt a move in progress or a user-driven action
-  if (now < life.busyUntil) return;
+  if (catState.isBusy(now)) return;
   if (currentAnim !== baseAnim()) return;
 
   if (life.asleep) {
@@ -663,7 +669,7 @@ function wakeUp(startled) {
   scheduleBlink();
   life.energy = clamp01(life.energy + 0.45);
   life.lastInteract = Date.now();
-  life.busyUntil = Date.now() + 1400;
+  catState.enter("oneshot", 1400);
   if (startled) {
     emote("❗"); playHurt(); playAnim("hurt");
   } else {
@@ -900,7 +906,7 @@ function askQuestion() {
   const q = pickFrom(QUESTIONS);
   emote("❓");
   sayLine(q.q);
-  life.busyUntil = Date.now() + 60000;          // hold while waiting for the player
+  catState.enter("dialogue", 60000);            // hold while waiting for the player
   choicesEl.innerHTML = "";
   q.opts.forEach((opt) => {
     const b = document.createElement("button");
@@ -915,7 +921,7 @@ function askQuestion() {
     if (choicesEl.classList.contains("hidden")) return;
     choicesEl.classList.add("hidden");
     choicesEl.innerHTML = "";
-    life.busyUntil = Date.now() + 500;
+    catState.hold(500);
     emote("…");
     sayLine("…你不理我，哼。");
     flashExpression("cry", 2000);          // sulky teary eyes when ignored
@@ -927,7 +933,7 @@ function answerQuestion(opt) {
   clearTimeout(questionTimer);
   choicesEl.classList.add("hidden");
   choicesEl.innerHTML = "";
-  life.busyUntil = Date.now() + 2000;
+  catState.enter("oneshot", 2000);
   life.lastInteract = Date.now();
   addAffection(opt.aff);
   if (opt.aff > 0) life.mood = clamp01(life.mood + 0.1);
@@ -1024,7 +1030,7 @@ function openNicknameDialog() {
   if (!choicesEl) return;
   emote("✨");
   sayLine("我想给你一个专属的称呼～你想让我叫你什么呢？");
-  life.busyUntil = Date.now() + 60000;
+  catState.enter("dialogue", 60000);
   choicesEl.innerHTML = "";
   const input = document.createElement("input");
   input.type = "text";
@@ -1046,7 +1052,7 @@ function openNicknameDialog() {
       sayLine("嗯…那我先这样叫你吧～");
     }
     choicesEl.classList.add("hidden");
-    life.busyUntil = Date.now() + 1200;
+    catState.hold(1200);
   }, { once: true });
   choicesEl.appendChild(input);
   choicesEl.appendChild(submit);
@@ -1073,7 +1079,7 @@ function triggerBondEvent(stage) {
     grantUnlock(u.key);
     showStatus(`🎁 解锁 —— ${u.label}`, 4500);
   }
-  life.busyUntil = Date.now() + ev.lines.length * 3400 + 2000;
+  catState.enter("dialogue", ev.lines.length * 3400 + 2000);
   showStatus(`✨ 羁绊加深 —— ${stage.name}`, 4200);
   flashExpression("love", 2600);            // heart eyes at the bond moment
   if (ev.anim && renderer.hasClip(ev.anim)) {
@@ -1108,7 +1114,7 @@ function feedCat() {
   life.hunger = clamp01(life.hunger + 0.5);
   life.mood   = clamp01(life.mood + 0.12);
   addAffection(wasHungry ? 4 : 1.5);
-  life.busyUntil = Date.now() + 2400;
+  catState.enter("oneshot", 2400);
   emote("🐟");
   playAnim("eat");
   playEat();
@@ -1253,8 +1259,6 @@ if (diaryPanelEl) {
 // Petting — escalating reaction to taps on the sprite
 // =====================================================================
 function petCat() {
-  const now = Date.now();
-
   if (life.asleep) {                       // a touch wakes it gently
     wakeUp(false);
     playMeow();
@@ -1277,12 +1281,12 @@ function petCat() {
     else                       playPurr();
     sayLine(pickFrom(["呼噜呼噜～最喜欢你了！", "嘿嘿，好舒服喵～", "再多摸一会儿嘛～"]));
     life.mood = clamp01(life.mood + 0.18);
-    life.busyUntil = now + 1900;
+    catState.enter("oneshot", 1900);
     playAnim("happy");
   } else if (life.petStreak === 2) {
     emote("👋");
     playMeow();
-    life.busyUntil = now + 1300;
+    catState.enter("oneshot", 1300);
     playAnim("wave");
   } else {
     emote(pickFrom(["❤️", "♪", "！"]));
@@ -1572,7 +1576,7 @@ composites.configure({
   sayLine,
   audio,
   faceToward,
-  busyUntil: (ms) => { life.busyUntil = Date.now() + ms; },
+  busyUntil: (ms) => { catState.enter("composite", ms); },
 });
 
 
@@ -1680,7 +1684,7 @@ function handleMotion(event) {
     life.mood = clamp01(life.mood - 0.1);
     const reaction = Math.random() < 0.65 ? "hurt" : "attack";
     showStatus("被你晃到啦！", 1500);
-    life.busyUntil = Date.now() + 1500;
+    catState.enter("react", 1500);
     emote("💫");
     playAnim(reaction);
     flashExpression("surprise", 1500);     // startled wide eyes
@@ -2165,7 +2169,7 @@ function handleGestures(result) {
   const r = GESTURE_REACTION[name];
   if (!r) return;
   visionCooldownUntil = Date.now() + 3000;
-  life.busyUntil = Date.now() + 2200;
+  catState.enter("react", 2200);
   life.lastInteract = Date.now();
   if (r.aff) addAffection(r.aff);
   emote(r.emote);
@@ -2203,7 +2207,7 @@ function handleFace(result) {
     }
     if (smile > 0.45 && Date.now() >= visionCooldownUntil) {
       visionCooldownUntil = Date.now() + 5000;
-      life.busyUntil = Date.now() + 2000;
+      catState.enter("react", 2000);
       life.lastInteract = Date.now();
       addAffection(1.5);
       life.mood = clamp01(life.mood + 0.12);
@@ -2443,8 +2447,8 @@ async function sendChat(text) {
   // Claim the autonomous loop for the whole in-flight window so runBehavior
   // can't fire proactiveSpeak/seekCare/askQuestion → sayLine() mid-stream
   // (which would clobber the streaming bubble and start a competing TTS).
-  // Each terminal path below resets busyUntil to a short read-tail.
-  life.busyUntil = Date.now() + 20000;
+  // Each terminal path below resets the busy window to a short read-tail.
+  catState.enter("chat", 20000);
   // Streaming path — let the bubble fill as text arrives.
   if (CHAT_STREAM_ENDPOINT) {
     const ok = await tryStreaming(text);
@@ -2494,7 +2498,7 @@ async function tryStreaming(text) {
   thinking.remove();
   if (failed && !reply) {
     if (sayBubbleEl) sayBubbleEl.classList.remove("show");
-    life.busyUntil = Date.now() + 400;     // release the loop for the fallback path
+    catState.hold(400);                    // release the loop for the fallback path
     return false;
   }
   if (!reply) reply = "喵？";
@@ -2521,7 +2525,7 @@ async function tryStreaming(text) {
   sayTimer = setTimeout(() => sayBubbleEl?.classList.remove("show"), dwell);
   // Release the loop, leaving a short read-tail so it doesn't barge in
   // while the bubble is still up.
-  life.busyUntil = Date.now() + dwell;
+  catState.hold(dwell);
   return true;
 }
 
@@ -2538,7 +2542,7 @@ async function sendChatNonStreaming(text) {
       thinking.remove();
       appendMsg("cat", "（喵…太快啦，让我喘口气）");
       showStatus("请稍候再试 ♪", 1800);
-      life.busyUntil = Date.now() + 400;
+      catState.hold(400);
       return;
     }
     const data = await r.json();
@@ -2546,7 +2550,7 @@ async function sendChatNonStreaming(text) {
     if (data && data.ok === false) {
       appendMsg("cat", `（连不上喵的大脑：${data.error?.code || "unknown"}）`);
       console.error("Chat error envelope:", data.error);
-      life.busyUntil = Date.now() + 400;
+      catState.hold(400);
       return;
     }
     const reply = data.reply || "喵？";
@@ -2560,12 +2564,12 @@ async function sendChatNonStreaming(text) {
     if (anim && renderer.hasClip(anim)) userPlay(anim);
     emote(data.emote || "💬");
     sayLine(reply);
-    life.busyUntil = Date.now() + bubbleDwellMs(reply);
+    catState.hold(bubbleDwellMs(reply));
   } catch (e) {
     thinking.remove();
     appendMsg("cat", "（连不上服务器，喵…）");
     console.error("Chat error:", e);
-    life.busyUntil = Date.now() + 400;
+    catState.hold(400);
   }
 }
 

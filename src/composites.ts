@@ -2,8 +2,9 @@
 // emotes + sayLines + audio cues, choreographed in time. They feel like
 // new animations without needing the Blender pipeline rerun.
 //
-// Each composite returns a duration in ms so the caller can mark
-// busyUntil and the autonomous loop doesn't interrupt mid-sequence.
+// Each composite returns a duration in ms so the caller can claim the
+// "composite" state for that long and the autonomous loop doesn't interrupt
+// mid-sequence (main.js wires cfg.busyUntil → catState.enter("composite", ms)).
 //
 // Usage from main.js:
 //   import * as composites from "./composites.js";
