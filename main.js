@@ -20,6 +20,7 @@ import { streamChat } from "./src/chat-stream.js";
 import * as particles from "./src/particles.js";
 import * as composites from "./src/composites.js";
 import * as hints from "./src/hints.js";
+import { ModelViewerRenderer } from "./src/renderer/ModelViewerRenderer";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -125,6 +126,9 @@ const VOICE_MAP = [
 // =====================================================================
 const $ = (sel) => document.querySelector(sel);
 const modelViewer = $("#catModel");
+// Animation playback funnels through this renderer so the model-viewer backend
+// can be swapped for three.js in P2 without touching callers (see CatRenderer).
+const renderer = new ModelViewerRenderer(modelViewer);
 const animBar   = $("#animBar");
 const micBtn    = $("#micBtn");
 const chatBtn   = $("#chatBtn");
@@ -494,19 +498,15 @@ const EMOTE_ART = {
 //     - https://github.com/google/model-viewer/issues/3144
 // =====================================================================
 async function playAnim(name) {
-  const avail = modelViewer.availableAnimations || [];
+  const avail = renderer.getClips();
   if (!avail.includes(name)) {
     console.warn(`Animation "${name}" missing; falling back to idle.`, avail);
     name = avail.includes("idle") ? "idle" : avail[0];
     if (!name) return;
   }
   currentAnim = name;
-  modelViewer.setAttribute("animation-name", name);
-  await modelViewer.updateComplete;
-  modelViewer.currentTime = 0;
-
   const loop = isLoopClip(name);
-  modelViewer.play({ repetitions: loop ? Infinity : 1 });
+  await renderer.playClip(name, loop);
 
   // Only move the active highlight when the clip has a matching button —
   // ambient clips (lookaround/groom…) leave the idle button lit.
@@ -520,7 +520,7 @@ async function playAnim(name) {
 
   clearTimeout(oneShotTimer);
   if (!loop) {
-    const dur = (modelViewer.duration || 1.2) * 1000;
+    const dur = renderer.currentDuration() * 1000;
     oneShotTimer = setTimeout(() => {
       if (currentAnim === name) playAnim(baseAnim());
     }, dur + 90);
@@ -535,7 +535,7 @@ function userPlay(name) {
   emote(EMOTE_FOR[name] || "");
   life.busyUntil = Date.now() + 1600;
   playAnim(name).then(() => {
-    life.busyUntil = Date.now() + (modelViewer.duration || 1.2) * 1000 + 400;
+    life.busyUntil = Date.now() + renderer.currentDuration() * 1000 + 400;
   });
 }
 
@@ -932,7 +932,7 @@ function answerQuestion(opt) {
   addAffection(opt.aff);
   if (opt.aff > 0) life.mood = clamp01(life.mood + 0.1);
   emote(opt.aff > 0 ? "❤️" : (opt.aff < 0 ? "💧" : "·ω·"));
-  if (opt.anim && (modelViewer.availableAnimations || []).includes(opt.anim)) {
+  if (opt.anim && renderer.hasClip(opt.anim)) {
     playAnim(opt.anim);
   }
   sayLine(opt.reply);
@@ -1076,7 +1076,7 @@ function triggerBondEvent(stage) {
   life.busyUntil = Date.now() + ev.lines.length * 3400 + 2000;
   showStatus(`✨ 羁绊加深 —— ${stage.name}`, 4200);
   flashExpression("love", 2600);            // heart eyes at the bond moment
-  if (ev.anim && (modelViewer.availableAnimations || []).includes(ev.anim)) {
+  if (ev.anim && renderer.hasClip(ev.anim)) {
     playAnim(ev.anim);
   }
   let i = 0;
@@ -2508,7 +2508,7 @@ async function tryStreaming(text) {
   if (mood === "down") life.mood = clamp01(life.mood - 0.12);
 
   const anim = envelope?.animation;
-  if (anim && (modelViewer.availableAnimations || []).includes(anim)) userPlay(anim);
+  if (anim && renderer.hasClip(anim)) userPlay(anim);
   emote(envelope?.emote || "💬");
 
   // TTS gets the final reply once — streaming TTS isn't worth the complexity.
@@ -2557,7 +2557,7 @@ async function sendChatNonStreaming(text) {
     if (data.mood === "up")   life.mood = clamp01(life.mood + 0.15);
     if (data.mood === "down") life.mood = clamp01(life.mood - 0.12);
     const anim = data.animation;
-    if (anim && (modelViewer.availableAnimations || []).includes(anim)) userPlay(anim);
+    if (anim && renderer.hasClip(anim)) userPlay(anim);
     emote(data.emote || "💬");
     sayLine(reply);
     life.busyUntil = Date.now() + bubbleDwellMs(reply);
