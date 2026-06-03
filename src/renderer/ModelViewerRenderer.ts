@@ -49,4 +49,18 @@ export class ModelViewerRenderer implements CatRenderer {
   isReady(): boolean {
     return !!this.mv.loaded;
   }
+
+  setOrientation(yawDeg: number, pitchDeg: number): void {
+    // model-viewer `orientation` is "roll pitch yaw" — yaw is the THIRD slot.
+    // (Writing yaw into the second slot looks like nothing happens; v4.1
+    // regressed exactly this.) Roll stays 0, pitch slot 2, yaw slot 3.
+    this.mv.setAttribute(
+      "orientation",
+      `0deg ${pitchDeg.toFixed(1)}deg ${yawDeg.toFixed(1)}deg`
+    );
+  }
+
+  getInteractionTarget(): HTMLElement {
+    return this.mv;
+  }
 }

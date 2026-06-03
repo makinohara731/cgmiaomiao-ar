@@ -5,9 +5,9 @@
  * hiding the concrete renderer behind this interface lets a later phase swap
  * the model-viewer backend for a three.js one without touching any caller.
  *
- * Scope (P1.2): animation only. Orientation, facial-expression texture swaps,
- * and the load/error lifecycle stay on the model-viewer element for now and
- * fold into this interface in P2.
+ * Scope grows in stages: P1.2 animation only; P2.4 adds orientation (face-toward)
+ * and the pointer-interaction target so the three.js backend reaches parity.
+ * Facial-expression texture swaps still fold in next (see docs/进度.md).
  */
 export interface CatRenderer {
   /** All clip names the loaded model exposes. */
@@ -20,4 +20,13 @@ export interface CatRenderer {
   currentDuration(): number;
   /** Whether the underlying model has finished loading. */
   isReady(): boolean;
+  /**
+   * Turn the whole model to face a direction, layered on top of the playing
+   * clip (it's the model's orientation, not an animation). `yawDeg` left(−)/
+   * right(+), `pitchDeg` down(−)/up(+). Both are absolute target angles in
+   * degrees; the caller eases toward them frame by frame.
+   */
+  setOrientation(yawDeg: number, pitchDeg: number): void;
+  /** The DOM element that pointer/petting listeners should attach to. */
+  getInteractionTarget(): HTMLElement;
 }

@@ -1331,14 +1331,9 @@ function tickFace() {
   facePitchCurrent += (facePitchTarget - facePitchCurrent) * 0.16;
   if (Math.abs(faceYawTarget   - faceYawCurrent)   < 0.25) faceYawCurrent   = faceYawTarget;
   if (Math.abs(facePitchTarget - facePitchCurrent) < 0.25) facePitchCurrent = facePitchTarget;
-  // model-viewer orientation is "roll pitch yaw". The proven-working v3 code
-  // turned the cat left/right by writing yaw into the THIRD slot; the v4.1
-  // refactor wrongly moved yaw to the second slot (so it never turned). Roll
-  // stays 0, pitch in slot 2, yaw in slot 3.
-  modelViewer.setAttribute(
-    "orientation",
-    `0deg ${facePitchCurrent.toFixed(1)}deg ${faceYawCurrent.toFixed(1)}deg`
-  );
+  // Hand the eased yaw/pitch to the active renderer: model-viewer writes its
+  // "roll pitch yaw" orientation attribute, three.js rotates the model pivot.
+  renderer.setOrientation(faceYawCurrent, facePitchCurrent);
   const settled = faceYawCurrent === faceYawTarget && facePitchCurrent === facePitchTarget;
   faceRAF = settled ? null : requestAnimationFrame(tickFace);
 }
@@ -1468,12 +1463,15 @@ function triggerLookAt(x, y) {
   particles.burst("sparkle", x, y, 3);
 }
 
-modelViewer.addEventListener("pointerdown", startPress);
-modelViewer.addEventListener("pointerup",   endPress);
-modelViewer.addEventListener("pointercancel", cancelPress);
-modelViewer.addEventListener("pointerleave",  cancelPress);
+// Attach petting/look gestures to whichever element the renderer presents
+// (model-viewer element or three.js canvas), so taps work under both backends.
+const interactTarget = renderer.getInteractionTarget();
+interactTarget.addEventListener("pointerdown", startPress);
+interactTarget.addEventListener("pointerup",   endPress);
+interactTarget.addEventListener("pointercancel", cancelPress);
+interactTarget.addEventListener("pointerleave",  cancelPress);
 // Cancel long-press on significant drag (user is rotating the orbit).
-modelViewer.addEventListener("pointermove", (e) => {
+interactTarget.addEventListener("pointermove", (e) => {
   if (!pressStart) return;
   if (Math.hypot(e.clientX - pressX, e.clientY - pressY) > 14) cancelPress();
 });

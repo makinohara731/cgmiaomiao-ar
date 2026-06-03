@@ -59,6 +59,7 @@ export class ThreeCatRenderer implements CatRenderer {
   private readonly actions = new Map<string, THREE.AnimationAction>();
   private currentAction: THREE.AnimationAction | null = null;
   private root: THREE.Object3D | null = null;
+  private pivot: THREE.Group | null = null;
   private controls: OrbitControls | null = null;
   private readonly target = new THREE.Vector3();
   private readonly enableControls: boolean;
@@ -174,19 +175,51 @@ export class ThreeCatRenderer implements CatRenderer {
     return this.ready;
   }
 
+  setOrientation(yawDeg: number, pitchDeg: number): void {
+    if (!this.pivot) return;
+    // Turn about the model centre: yaw → world-up (Y), pitch → X. Sign matches
+    // model-viewer's UX (positive yaw turns the cat toward screen-right).
+    this.pivot.rotation.set(
+      THREE.MathUtils.degToRad(pitchDeg),
+      THREE.MathUtils.degToRad(yawDeg),
+      0
+    );
+  }
+
+  getInteractionTarget(): HTMLElement {
+    return this.canvas;
+  }
+
   // ---- internals ----
 
   private onLoaded(gltf: { scene: THREE.Object3D; animations: THREE.AnimationClip[] }): void {
     const root = gltf.scene;
     this.root = root;
-    this.scene.add(root);
 
     this.mixer = new THREE.AnimationMixer(root);
     for (const clip of gltf.animations) {
       this.actions.set(clip.name, this.mixer.clipAction(clip));
     }
 
-    this.frameTo(root);
+    // Wrap the model in a pivot AT ITS CENTRE so setOrientation() (face-toward)
+    // turns it in place — model-viewer rotates about the model centre, not the
+    // world origin. Re-centring leaves the world position (and thus framing)
+    // unchanged: the model is offset by −centre and the pivot by +centre.
+    // SAFE because no clip animates the scene-root node: all 22 clips drive Hips
+    // and below (animate_v2.py), so the mixer never overwrites root.position and
+    // un-centres the pivot. A future re-rig that bakes root motion would break
+    // this — keep root motion off the GLTF scene-root node, or pivot elsewhere.
+    root.updateWorldMatrix(true, true);
+    const centre = new THREE.Box3().setFromObject(root).getCenter(new THREE.Vector3());
+    const pivot = new THREE.Group();
+    pivot.position.copy(centre);
+    root.position.sub(centre);
+    pivot.add(root);
+    this.pivot = pivot;
+    this.scene.add(pivot);
+    pivot.updateMatrixWorld(true);
+
+    this.frameTo(pivot);
     this.setupControls();
     this.ready = true;
 
@@ -197,8 +230,8 @@ export class ThreeCatRenderer implements CatRenderer {
   }
 
   /** Place the camera to frame the model, mirroring model-viewer's view angle. */
-  private frameTo(root: THREE.Object3D): void {
-    const box = new THREE.Box3().setFromObject(root);
+  private frameTo(obj: THREE.Object3D): void {
+    const box = new THREE.Box3().setFromObject(obj);
     if (box.isEmpty()) return; // degenerate/empty model — avoid NaN camera pos
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
@@ -275,9 +308,12 @@ export class ThreeCatRenderer implements CatRenderer {
     this.mixer?.stopAllAction();
     if (this.root) {
       this.mixer?.uncacheRoot(this.root);
-      this.scene.remove(this.root);
       disposeObject(this.root); // renderer.dispose() does NOT free these
       this.root = null;
+    }
+    if (this.pivot) {
+      this.scene.remove(this.pivot); // root lives under the pivot, not the scene
+      this.pivot = null;
     }
     (this.scene.environment as THREE.Texture | null)?.dispose();
     this.scene.environment = null;
