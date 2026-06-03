@@ -681,6 +681,35 @@ body.time-dusk #envSun { opacity: .6; filter: drop-shadow(0 0 12px rgba(255, 130
   text-align: center; color: #aaa; padding: 28px 0; font-size: 13px;
 }
 
+/* === 回廊 / gallery panel (P4) — reuses .status-panel / .diary-list / .diary-item === */
+.gallery-sub {
+  margin: 12px 2px 2px; font-size: 12px; font-weight: 700; color: #5a8a59;
+  letter-spacing: 0.4px;
+}
+.diary-item.locked {
+  opacity: 0.5; filter: grayscale(0.6);
+  border-left-color: #b9c4b8;
+}
+.gallery-slots {
+  display: flex; flex-direction: column; gap: 8px; margin: 6px -4px 2px; padding: 2px 4px;
+}
+.save-slot {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: rgba(95, 185, 94, 0.06); border-radius: 8px; padding: 8px 11px;
+}
+.slot-info { font-size: 12.5px; color: #2a4a29; line-height: 1.5; }
+.slot-info b { color: #2a6e29; }
+.slot-time { color: #88a585; font-size: 11px; }
+.slot-empty { color: #aab; }
+.slot-btns { display: flex; gap: 6px; flex: 0 0 auto; }
+.slot-btn {
+  padding: 6px 12px; font-size: 12.5px; font-weight: 600; color: #2a6e29;
+  background: rgba(255, 255, 255, 0.9); border: 1.5px solid #a4e6a3;
+  border-radius: 9px; cursor: pointer; transition: background 0.15s, transform 0.1s;
+}
+.slot-btn:active { transform: scale(0.96); background: #eafbe8; }
+.slot-load { color: #b06a1f; border-color: #f0c48f; }
+
 /* === Settings panel — state-machine tunables (reuses .status-panel) === */
 .cfg-row {
   display: flex; justify-content: space-between; align-items: center;

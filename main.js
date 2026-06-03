@@ -27,6 +27,7 @@ import { CatStateMachine } from "./src/anim/CatState";
 import { DialogueBox } from "./src/vn/DialogueBox";
 import { Choices } from "./src/vn/Choices";
 import { story } from "./src/story/StoryEngine";
+import * as saves from "./src/story/saves";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -190,6 +191,11 @@ const diaryPanelEl    = $("#diaryPanel");
 const diaryListEl     = $("#diaryList");
 const diaryCloseBtn   = $("#diaryClose");
 const spOpenDiaryBtn  = $("#spOpenDiary");
+const galleryPanelEl   = $("#galleryPanel");
+const galleryEndingsEl = $("#galleryEndings");
+const gallerySlotsEl   = $("#gallerySlots");
+const galleryCloseBtn  = $("#galleryClose");
+const spOpenGalleryBtn = $("#spOpenGallery");
 // Cached once — the anim-bar buttons are static. Avoids two whole-document
 // querySelectorAll(".anim-btn") on every playAnim() call.
 const ANIM_BTNS = animBar ? Array.from(animBar.querySelectorAll(".anim-btn")) : [];
@@ -262,6 +268,7 @@ const baseAnim = () => (life.asleep ? "sleep" : "idle");
 const LIFE_KEY = "miaomiao.life.v1";
 
 function saveLife() {
+  if (saves.isSuppressed()) return; // mid slot-restore — don't clobber the restored keys
   try {
     localStorage.setItem(LIFE_KEY, JSON.stringify({
       energy: life.energy, mood: life.mood, hunger: life.hunger,
@@ -1276,6 +1283,70 @@ if (diaryPanelEl) {
   });
 }
 
+// ---- 回廊 / gallery panel (P4) — unlocked endings + 3 save slots ----
+const sanitizeShort = (s) => String(s || "").replace(/[<>&]/g, "");
+function fmtSlotTime(ts) {
+  try {
+    return new Date(ts).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch (_) { return ""; }
+}
+function renderGallery() {
+  if (galleryEndingsEl) {
+    const list = story.endings();
+    galleryEndingsEl.innerHTML = !list.length
+      ? `<div class="diary-empty">还没有结局…继续和喵喵相处吧～</div>`
+      : list.map(({ ending, unlocked }) => {
+          const label = unlocked ? ending.label : "？？？";
+          const blurb = unlocked ? ending.blurb : "尚未解锁的结局";
+          return `<div class="diary-item${unlocked ? "" : " locked"}"><span class="diary-meta">${ending.icon} ${label}</span>${blurb}</div>`;
+        }).join("");
+  }
+  if (gallerySlotsEl) {
+    const slots = saves.listSlots();
+    gallerySlotsEl.innerHTML = slots.map((m, i) => {
+      const info = m.used
+        ? `${sanitizeShort(m.catName) || "喵喵"} · 好感 ${m.affection} · ${sanitizeShort(m.stage) || "初遇"} <span class="slot-time">${fmtSlotTime(m.timestamp)}</span>`
+        : `<span class="slot-empty">空存档位</span>`;
+      const loadBtn = m.used ? `<button class="slot-btn slot-load" data-slot="${i}">读取</button>` : "";
+      return `<div class="save-slot"><div class="slot-info"><b>存档 ${i + 1}</b><br>${info}</div><div class="slot-btns"><button class="slot-btn slot-save" data-slot="${i}">保存</button>${loadBtn}</div></div>`;
+    }).join("");
+    gallerySlotsEl.querySelectorAll(".slot-save").forEach((b) => b.addEventListener("click", () => doSaveSlot(+b.dataset.slot)));
+    gallerySlotsEl.querySelectorAll(".slot-load").forEach((b) => b.addEventListener("click", () => doLoadSlot(+b.dataset.slot)));
+  }
+}
+function doSaveSlot(n) {
+  saves.saveSlot(n, { affection: life.affection, stage: stageOf(life.affection).name, catName: catNameDisplay(), route: story.route() });
+  renderGallery();
+  emote("💾");
+  showStatus(`已保存到存档 ${n + 1} ✨`, 2000);
+}
+function doLoadSlot(n) {
+  // Restore + rehydrate SYNCHRONOUSLY inside withSuppressed so the periodic
+  // saveLife / visibilitychange persist can't clobber the just-restored keys.
+  let ok = false;
+  saves.withSuppressed(() => {
+    ok = saves.restoreSlot(n);
+    if (!ok) return;
+    loadLife(); loadMem(); loadDiary(); dailyRoll(); story.load(); applyUnlocksOnLoad(); refreshHud();
+  });
+  renderGallery();
+  showStatus(ok ? `已读取存档 ${n + 1} ～` : "这个存档位是空的", 2200);
+}
+function openGalleryPanel() {
+  renderGallery();
+  if (galleryPanelEl) galleryPanelEl.classList.remove("hidden");
+}
+if (spOpenGalleryBtn) spOpenGalleryBtn.addEventListener("click", () => {
+  if (statusPanelEl) statusPanelEl.classList.add("hidden");
+  openGalleryPanel();
+});
+if (galleryCloseBtn) galleryCloseBtn.addEventListener("click", () => galleryPanelEl?.classList.add("hidden"));
+if (galleryPanelEl) {
+  galleryPanelEl.addEventListener("click", (e) => {
+    if (e.target === galleryPanelEl) galleryPanelEl.classList.add("hidden");
+  });
+}
+
 // =====================================================================
 // Petting — escalating reaction to taps on the sprite
 // =====================================================================
@@ -1619,7 +1690,7 @@ story.configure({
   writeDiary,
   addAffection,
 });
-if (import.meta.env && import.meta.env.DEV) window.__story = story; // headless P4 checks
+if (import.meta.env && import.meta.env.DEV) { window.__story = story; window.__saves = saves; } // headless P4 checks
 
 
 // =====================================================================

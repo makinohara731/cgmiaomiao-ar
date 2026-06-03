@@ -297,6 +297,7 @@
     <div id="spTheme" class="sp-theme"></div>
     <div class="sp-link-row">
       <button id="spOpenDiary" class="sp-cfg-link">📖 日记</button>
+      <button id="spOpenGallery" class="sp-cfg-link">🏛 回廊</button>
       <button id="spOpenCfg" class="sp-cfg-link">⚙ 设置</button>
     </div>
   </div>
@@ -309,6 +310,19 @@
     <div class="sp-title">📖 喵喵的日记</div>
     <div id="diaryList" class="diary-list"></div>
     <div class="cfg-hint">喵喵会把和你之间的小事偷偷写下来。</div>
+  </div>
+</div>
+
+<!-- Gallery panel (P4) — 回廊: unlocked endings + 3 save slots (cloned from diary) -->
+<div id="galleryPanel" class="status-panel hidden">
+  <div class="sp-card">
+    <button id="galleryClose" class="sp-close" aria-label="关闭">✕</button>
+    <div class="sp-title">🏛 回廊 · 结局与存档</div>
+    <div class="gallery-sub">结局收藏</div>
+    <div id="galleryEndings" class="diary-list"></div>
+    <div class="gallery-sub">存档（3 位）</div>
+    <div id="gallerySlots" class="gallery-slots"></div>
+    <div class="cfg-hint">在这里回顾走过的结局，或保存 / 读取你和喵喵的进度。</div>
   </div>
 </div>
 
