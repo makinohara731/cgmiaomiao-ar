@@ -299,6 +299,41 @@ body.cam-front #camFeed { transform: scaleX(-1); }
 .cam-swap-btn { display: none; }
 body.cam-mode .cam-swap-btn { display: flex; }
 
+/* === MindAR image-target AR (desktop three.js) — live feed behind the
+   transparent #catCanvas (z-index 1); the cat anchors onto the marker card === */
+#scene video.ar-feed {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  background: #000;
+  z-index: 0;
+}
+/* drop the storybook scene so the camera feed shows behind the cat */
+body.ar-mode { background: #000; }
+body.ar-mode .env-layer { display: none; }
+/* marker-card hint (shown while no card is locked) */
+#arHint {
+  position: fixed; left: 50%; bottom: 92px;
+  transform: translateX(-50%);
+  z-index: 45;
+  opacity: 0; pointer-events: none;
+  transition: opacity .3s ease;
+}
+#arHint.show { opacity: 1; }
+.ar-hint-card {
+  background: rgba(18, 26, 34, .85);
+  border-radius: 14px; padding: 10px 10px 8px;
+  text-align: center; color: #e6f1fb;
+  font-size: 12px; line-height: 1.5;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .45);
+  backdrop-filter: blur(4px);
+}
+.ar-hint-card img {
+  width: 128px; height: 128px;
+  border-radius: 10px; display: block;
+  margin: 0 auto 6px;
+}
+
 /* === Storybook environment — sky / sun-moon / hills / trees / grass === */
 .env-layer {
   position: fixed; left: 0; right: 0;

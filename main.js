@@ -21,6 +21,8 @@ import * as particles from "./src/particles";
 import * as composites from "./src/composites";
 import * as hints from "./src/hints";
 import { createRenderer } from "./src/renderer/RendererFactory";
+import { canActivateAR } from "./src/renderer/capabilities";
+import { MindArSession } from "./src/ar/MindArSession";
 import { CatStateMachine } from "./src/anim/CatState";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
@@ -128,6 +130,7 @@ const VOICE_MAP = [
 const $ = (sel) => document.querySelector(sel);
 const modelViewer = $("#catModel");
 const catCanvas = $("#catCanvas");
+const sceneEl = $("#scene");
 // Pick the renderer backend (model-viewer by default; three.js via
 // ?renderer=three) and wire the DOM. Animation funnels through the returned
 // CatRenderer so callers (playAnim et al.) stay backend-agnostic. The three.js
@@ -2074,13 +2077,89 @@ async function swapCamera() {
   }
 }
 
+// =====================================================================
+// Desktop MindAR image-target REAL AR (P2.3). On the three.js backend with a
+// camera + secure context, 📸 enters MindAR (the cat anchors onto the marker
+// card) instead of the model-viewer camera-passthrough. The heavy mind-ar
+// runtime is lazy-loaded only on first enter. Seating (scale/stand-up/lift) is
+// tunable — defaults are a first guess to refine against a real card.
+// =====================================================================
+const AR_SEATING = { scale: 0.5, rotXDeg: 90, rotYDeg: 0, lift: 0 };
+const arCapable = () => rendererBackend === "three" && canActivateAR();
+let arSession = null;
+let arMode = false;
+let arHintEl = null;
+
+function ensureArHint() {
+  if (arHintEl) return arHintEl;
+  const base = (import.meta.env && import.meta.env.BASE_URL) || "/";
+  arHintEl = document.createElement("div");
+  arHintEl.id = "arHint";
+  arHintEl.innerHTML =
+    '<div class="ar-hint-card">' +
+    '<img src="' + base + 'targets/miao-card.png" alt="标记卡" />' +
+    "<p>把这张标记卡对准摄像头<br>用另一台手机打开它，或打印出来</p>" +
+    "</div>";
+  document.body.appendChild(arHintEl);
+  return arHintEl;
+}
+const showArHint = () => ensureArHint().classList.add("show");
+const hideArHint = () => { if (arHintEl) arHintEl.classList.remove("show"); };
+
+async function enterArMode() {
+  if (arMode) return;
+  if (!arSession) {
+    arSession = new MindArSession();
+    arSession.onFound(() => { hideArHint(); emote("✨"); showStatus("找到你啦，我出来咯～", 2200); });
+    arSession.onLost(() => { showArHint(); });
+  }
+  showStatus("正在打开摄像头喵～", 2200);
+  try {
+    await renderer.enterAR(arSession, AR_SEATING);
+  } catch (e) {
+    const denied = e && (e.name === "NotAllowedError" || /denied|permission/i.test(String(e)));
+    showStatus(denied ? "要允许相机权限，喵喵才能出现哦～" : "AR 打不开喵…(" + ((e && e.name) || "err") + ")", 3400);
+    return;
+  }
+  arMode = true;
+  document.body.classList.add("ar-mode");
+  const v = arSession.video();
+  if (v && sceneEl) { v.classList.add("ar-feed"); sceneEl.insertBefore(v, catCanvas); }
+  if (camBtn) { camBtn.textContent = "✕"; camBtn.classList.add("active"); }
+  bumpInteract();
+  showArHint();
+  sayLine(pickFrom(["把卡片对准我，我就出来啦！", "喵～对准标记卡看看！"]));
+}
+
+function exitArMode() {
+  if (!arMode) return;
+  arMode = false;
+  document.body.classList.remove("ar-mode");
+  renderer.exitAR();
+  if (arSession) {
+    const v = arSession.video();
+    if (v && v.parentNode) v.parentNode.removeChild(v);
+    if (v) v.classList.remove("ar-feed");
+  }
+  hideArHint();
+  if (camBtn) { camBtn.textContent = "📸"; camBtn.classList.remove("active"); }
+}
+
 if (camBtn && camFeed) {
   camBtn.addEventListener("click", () => {
-    if (camMode) exitCamMode(); else enterCamMode();
+    // Desktop three.js + camera → MindAR image-target AR; else the legacy
+    // model-viewer/mobile camera passthrough.
+    if (arCapable()) {
+      if (arMode) exitArMode(); else enterArMode();
+    } else if (camMode) {
+      exitCamMode();
+    } else {
+      enterCamMode();
+    }
   });
 }
 if (camSwapBtn) camSwapBtn.addEventListener("click", swapCamera);
-window.addEventListener("pagehide", () => { if (camMode) exitCamMode(); });
+window.addEventListener("pagehide", () => { if (camMode) exitCamMode(); if (arMode) exitArMode(); });
 
 // =====================================================================
 // Camera vision — hand gestures + facial expression. While the camera

@@ -25,19 +25,47 @@ export interface MindarImageRuntime {
 
 let cached: Promise<MindarImageRuntime> | null = null;
 
-/** Load (once) the vendored mind-ar image runtime. Idempotent. */
+function toRuntime(m: any): MindarImageRuntime {
+  if (!m || typeof m.Controller !== "function") {
+    throw new Error("mind-ar runtime loaded but Controller is missing");
+  }
+  return { Controller: m.Controller, Compiler: m.Compiler, UI: m.UI };
+}
+
+/**
+ * Load (once) the vendored mind-ar image runtime. Idempotent.
+ *
+ * Loaded via a `<script type="module">` tag, NOT `import()`. A dynamic import()
+ * of a `public/` URL works in the static production build but FAILS under the
+ * Vite DEV server (`npm run dev`): Vite runs the request through its module
+ * transform pipeline (rewritten to `…?import`), which 500s on the 2.2MB vendored
+ * tfjs bundle. A script-src request is served statically by both, and the bundle
+ * sets `window.MINDAR.IMAGE` on execution + resolves its own sibling chunks
+ * (controller-*.js / ui-*.js) relative to its URL. Heavy (tfjs), loaded only
+ * here on first enter-AR, so it never touches the main bundle either way.
+ */
 export function loadMindarImage(): Promise<MindarImageRuntime> {
   if (cached) return cached;
   const base = (import.meta as any).env?.BASE_URL ?? "/";
   const url = base + "vendor/mindar/mindar-image.prod.js";
-  // @vite-ignore: load the vendored ESM bundle at runtime, untouched by the
-  // bundler, so it stays out of the main chunk and resolves its sibling chunks
-  // (controller-*.js / ui-*.js) relative to public/vendor/mindar/.
-  cached = import(/* @vite-ignore */ url).then((m: any): MindarImageRuntime => {
-    if (!m || typeof m.Controller !== "function") {
-      throw new Error("mind-ar runtime loaded but Controller is missing");
+  cached = new Promise<MindarImageRuntime>((resolve, reject) => {
+    const pre = (window as any).MINDAR?.IMAGE;
+    if (pre?.Controller) {
+      resolve(toRuntime(pre));
+      return;
     }
-    return { Controller: m.Controller, Compiler: m.Compiler, UI: m.UI };
+    const s = document.createElement("script");
+    s.type = "module";
+    s.src = url;
+    s.onload = () => {
+      try {
+        resolve(toRuntime((window as any).MINDAR?.IMAGE));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    s.onerror = () => reject(new Error("failed to load mind-ar runtime: " + url));
+    document.head.appendChild(s);
   });
   return cached;
 }
