@@ -84,25 +84,27 @@ export const BEATS: Beat[] = [
   {
     id: "bond.promise",
     route: "羁绊",
+    manualSeen: true, // a missed/clobbered offer re-fires; committed only on a pick
     gate: (_s, l) => l.affection >= 60,
-    run: ({ hooks, setFlag }) => {
+    run: ({ hooks, setFlag, markSeen }) => {
       hooks.busy(30000); // hold for the choice window
       hooks.emote("🥺");
       hooks.sayLine("我们…会一直在一起，对不对？");
       hooks.choices.show(
         [{ label: "会一直在" }, { label: "谁知道呢" }],
         (item) => {
-          hooks.busy(2600);
+          markSeen(); // answered → commit (a timeout/miss leaves it to re-offer)
+          hooks.busy(5500); // cover the reply read dwell so the loop can't barge in
           if (item.label === "会一直在") {
             hooks.flashExpression("love", 2400);
             hooks.emote("❤️");
             hooks.sayLine("太好啦！那我要赖着你一辈子喵～");
-            hooks.addAffection(2);
+            setTimeout(() => hooks.addAffection(2), 4600); // after the line reads (avoid bond-event clobber)
             setFlag("promised", true);
           } else {
             hooks.emote("💧");
             hooks.sayLine("…别这样说嘛，我会难过的。");
-            hooks.addAffection(-1);
+            hooks.addAffection(-1); // a decrease never crosses a bond boundary
           }
         },
         { timeoutMs: 25000, onTimeout: () => hooks.busy(500) }
@@ -115,8 +117,9 @@ export const BEATS: Beat[] = [
     // explicit accept is the ONLY way acceptedRomance becomes true.
     id: "romance.offer",
     route: "羁绊",
+    manualSeen: true, // route-defining: NEVER consume it on a miss/timeout/clobber
     gate: (s, l) => l.affection >= 60 && !!l.userName && !s.acceptedRomance,
-    run: ({ hooks, acceptRomance, setFlag }) => {
+    run: ({ hooks, acceptRomance, setFlag, markSeen }) => {
       hooks.busy(30000);
       hooks.flashExpression("love", 2400);
       hooks.emote("🌸");
@@ -127,13 +130,14 @@ export const BEATS: Beat[] = [
           { label: "我们做好朋友吧", accept: false },
         ],
         (item) => {
-          hooks.busy(3000);
+          markSeen(); // committed only now — a missed offer re-fires on a later turn
+          hooks.busy(5500);
           if (item.accept) {
             acceptRomance();
             hooks.flashExpression("love", 2600);
             hooks.emote("💞");
             hooks.sayLine("呜哇…我好开心！以后…请多多指教喵～");
-            hooks.addAffection(3);
+            setTimeout(() => hooks.addAffection(3), 4600); // after the line reads
           } else {
             setFlag("declined_once", true);
             hooks.emote("🌼");

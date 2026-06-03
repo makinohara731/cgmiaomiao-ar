@@ -72,6 +72,10 @@ export interface BeatCtx {
   unlockEnding(id: string): void;
   /** The hard 浪漫 gate — set ONLY from the explicit 接受 choice. Flips the route. */
   acceptRomance(): void;
+  /** Commit this beat to seenBeats. For `manualSeen` choice beats, call this ONLY
+   *  when the choice is actually answered — never on a miss/timeout/clobber — so an
+   *  unanswered offer re-fires instead of being lost forever. */
+  markSeen(): void;
 }
 
 export interface Beat {
@@ -79,6 +83,14 @@ export interface Beat {
   route: RouteId;
   /** Fire at most once (default true). */
   once?: boolean;
+  /**
+   * Choice beats: the engine does NOT mark this seen before run(); the beat must
+   * call ctx.markSeen() itself once the player answers. This prevents a missed /
+   * timed-out / chat-clobbered offer from being permanently consumed (e.g. the
+   * 浪漫 route would otherwise lock out forever). While its choice is open, the
+   * shared `choices.isOpen()` guard stops maybeBeat from re-firing it.
+   */
+  manualSeen?: boolean;
   /** Eligibility gate, checked against fresh state + life. */
   gate(s: StoryState, l: LifeView): boolean;
   /** The scripted beat — uses ctx.hooks to speak/emote/choose. */

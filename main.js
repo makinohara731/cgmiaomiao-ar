@@ -57,7 +57,8 @@ const cfg = {
   bgm:         false,       // ambient BGM (gated on the 熟悉 unlock)
 };
 try { Object.assign(cfg, JSON.parse(localStorage.getItem(CFG_KEY) || "{}")); } catch (_) {}
-function saveCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (_) {} }
+function saveCfg() { if (saves.isSuppressed()) return; try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (_) {} }
+function loadCfg() { try { Object.assign(cfg, JSON.parse(localStorage.getItem(CFG_KEY) || "{}")); } catch (_) {} }
 
 // Personality presets bias the behaviour pool + need-decay rates.
 const PERSONALITY = {
@@ -331,6 +332,7 @@ function loadMem() {
   mem.topics = Array.isArray(saved.topics) ? saved.topics.slice(-6) : [];
 }
 function saveMem() {
+  if (saves.isSuppressed()) return; // mid slot-restore — don't clobber restored keys
   try { localStorage.setItem(MEM_KEY, JSON.stringify(mem)); } catch (_) {}
 }
 
@@ -458,6 +460,7 @@ function loadDiary() {
   } catch (_) { diary = []; }
 }
 function saveDiary() {
+  if (saves.isSuppressed()) return; // mid slot-restore — don't clobber restored keys
   try { localStorage.setItem(DIARY_KEY, JSON.stringify(diary.slice(-DIARY_CAP))); } catch (_) {}
 }
 function writeDiary(text, tag = "moment") {
@@ -1327,7 +1330,13 @@ function doLoadSlot(n) {
   saves.withSuppressed(() => {
     ok = saves.restoreSlot(n);
     if (!ok) return;
-    loadLife(); loadMem(); loadDiary(); dailyRoll(); story.load(); applyUnlocksOnLoad(); refreshHud();
+    // story.load() BEFORE dailyRoll(): dailyRoll's cross-day new-day branch calls
+    // story.onDailyRoll→save(); if the engine hadn't reloaded the restored blob
+    // first, that save would persist STALE in-memory story over the slot (the
+    // review's cross-day blocker). loadCfg re-applies the restored cfg to memory
+    // (it has no load* fn otherwise — restored to disk but ignored).
+    loadLife(); loadMem(); loadDiary(); loadCfg();
+    story.load(); dailyRoll(); applyUnlocksOnLoad(); refreshHud(); syncCfgUI();
   });
   renderGallery();
   showStatus(ok ? `已读取存档 ${n + 1} ～` : "这个存档位是空的", 2200);
@@ -1846,6 +1855,7 @@ const onIdle = (fn) => (window.requestIdleCallback
 setInterval(() => onIdle(saveLife), 15000);
 
 function persistAll() {
+  if (saves.isSuppressed()) return; // mid slot-restore — its own load* path owns the keys
   saveLife();
   saveMem();
   saveDiary();

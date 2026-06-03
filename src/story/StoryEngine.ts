@@ -14,6 +14,7 @@
  */
 import type { StoryState, StoryHooks, RouteId, Beat, BeatCtx, Ending, LifeView } from "./types";
 import { pickRoute, moodHintFor, BEATS, ENDINGS } from "./Route";
+import { isSuppressed } from "./saves";
 
 const STORY_KEY = "miaomiao.story.v1";
 
@@ -70,7 +71,10 @@ export class StoryEngine {
   }
 
   save(): void {
-    if (!this.loaded) return; // don't persist defaults before load() has hydrated
+    // Don't persist defaults before load() has hydrated, and don't write mid
+    // slot-restore (the withSuppressed window) — otherwise a host hook firing
+    // during rehydration (e.g. dailyRoll→onDailyRoll) clobbers the restored blob.
+    if (!this.loaded || isSuppressed()) return;
     this.state.updatedAt = Date.now();
     try {
       localStorage.setItem(STORY_KEY, JSON.stringify(this.state));
@@ -136,7 +140,10 @@ export class StoryEngine {
     const l = this.hooks.life();
     const beat = BEATS.find((b) => !this.isSeen(b) && b.gate(this.state, l));
     if (!beat) return false;
-    this.markSeen(beat); // mark BEFORE run so nothing double-fires
+    // Non-choice beats: mark seen BEFORE run so nothing double-fires. CHOICE beats
+    // (manualSeen) are marked seen only when their onPick resolves — while their
+    // choice is open the choices.isOpen() guard above prevents re-firing.
+    if (!beat.manualSeen) this.markSeen(beat);
     this.runBeat(beat, l);
     return true;
   }
@@ -147,10 +154,13 @@ export class StoryEngine {
   }
 
   unlockEnding(id: string): void {
-    if (!this.state.unlockedEndings.includes(id)) {
-      this.state.unlockedEndings.push(id);
-      this.save();
-    }
+    if (this.state.unlockedEndings.includes(id)) return;
+    this.state.unlockedEndings.push(id);
+    // One structured 解锁结局 diary line per ending, regardless of whether it was
+    // unlocked via a beat (unlockEnding) or a gate (syncEndings → unlockEnding).
+    const e = ENDINGS.find((x) => x.id === id);
+    if (e && this.hooks) this.hooks.writeDiary(`解锁结局「${e.label}」`, "bond");
+    this.save();
   }
 
   // ---- internals ----
@@ -165,8 +175,7 @@ export class StoryEngine {
     const l = this.hooks.life();
     for (const e of ENDINGS) {
       if (!this.state.unlockedEndings.includes(e.id) && e.gate(this.state, l)) {
-        this.state.unlockedEndings.push(e.id);
-        this.hooks.writeDiary(`解锁结局「${e.label}」`, "bond");
+        this.unlockEnding(e.id); // pushes + writes the 解锁结局 diary + saves (deduped)
       }
     }
   }
@@ -181,8 +190,10 @@ export class StoryEngine {
 
   private runBeat(beat: Beat, life: LifeView): void {
     if (!this.hooks) return;
-    this.hooks.busy(5000); // hold the autonomous loop while the beat plays (choice
-    // beats extend this themselves via ctx.hooks.busy before showing choices)
+    // Hold the autonomous loop for the full read dwell (= DialogueBox's max), so an
+    // un-throttled ambient turn (askQuestion / proactive sayLine) can't clobber the
+    // beat's line mid-read. Choice beats extend this further before showing choices.
+    this.hooks.busy(7000);
     const ctx: BeatCtx = {
       hooks: this.hooks,
       state: this.state,
@@ -194,6 +205,7 @@ export class StoryEngine {
         this.recomputeRoute(); // affection≥60 + userName + accepted → route flips to 浪漫
         this.save();
       },
+      markSeen: () => this.markSeen(beat),
     };
     try {
       beat.run(ctx);
