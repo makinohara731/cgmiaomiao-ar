@@ -2596,6 +2596,7 @@ function buildChatBody(text) {
     message: text,
     history: chatHistory.slice(-6),
     memory: buildMemoryBlock(),
+    story: story.storyHint(),          // P4: 【剧情】 mood hint (route atmosphere only)
     state: {
       mood:   Math.round(life.mood * 100) / 100,
       energy: Math.round(life.energy * 100) / 100,
