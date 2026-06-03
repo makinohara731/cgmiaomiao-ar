@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ThreeCatRenderer smoke (dev only)</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #20303a; }
+      #c { width: 100vw; height: 100vh; display: block; }
+      #hud { position: fixed; left: 8px; top: 8px; font: 12px/1.4 monospace;
+             color: #cfe; background: rgba(0,0,0,.4); padding: 6px 8px; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="hud">loading…</div>
+    <!-- Dev-only harness for P2.1. Served by `npm run dev`; NOT part of the
+         production build (vite builds index.html only). -->
+    <script type="module" src="./three-smoke.ts"></script>
+  </body>
+</html>
