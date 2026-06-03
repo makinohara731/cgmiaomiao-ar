@@ -2,3 +2,9 @@
 *.usdc
 *_backup.glb
 *_backup.usdz
+
+# Vite / Node
+node_modules/
+dist/
+*.local
+.vite/
