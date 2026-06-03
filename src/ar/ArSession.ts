@@ -25,6 +25,15 @@ export interface ArSession {
   anchor(): Object3D;
   /** The live camera <video> element (AR feed + MediaPipe gestures, P2.5). */
   video(): HTMLVideoElement | null;
+  /**
+   * The camera projection matrix to render the cat over the AR feed, as a
+   * 16-element COLUMN-MAJOR (GL) array — derive the three camera's fov/near/far
+   * from it (the worldMatrix the tracker feeds `anchor()` already bakes in the
+   * view transform, so the camera itself stays at the origin). Null until
+   * `start()` resolves. Mono simplification: WebXR would supply this per-frame
+   * per-eye instead — fine to widen the contract when an XR backend lands.
+   */
+  cameraProjectionMatrix(): number[] | null;
   /** Marker card entered view. */
   onFound(cb: () => void): void;
   /** Marker card left view. */

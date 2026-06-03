@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MindArSession smoke (dev only)</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #10171c; overflow: hidden; }
+      /* Camera feed sits BEHIND the transparent renderer canvas (the AR backdrop). */
+      #arFeed { position: fixed; inset: 0; width: 100%; height: 100%;
+                object-fit: cover; z-index: 0; }
+      #c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 1; }
+      #hud { position: fixed; left: 8px; top: 8px; z-index: 2; max-width: 90vw;
+             font: 12px/1.5 monospace; color: #cfe; background: rgba(0,0,0,.5);
+             padding: 6px 8px; border-radius: 6px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="hud">loading…</div>
+    <!-- Dev-only harness for P2.3 (MindArSession + ThreeCatRenderer.enterAR).
+         Served by `npm run dev`; NOT part of the production build (vite builds
+         index.html only). Drive tuning with ?sc=&rx=&ry=&lift=. -->
+    <script type="module" src="./ar-smoke.ts"></script>
+  </body>
+</html>

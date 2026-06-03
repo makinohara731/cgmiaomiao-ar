@@ -1,4 +1,5 @@
 import type { CatRenderer, FaceConfig } from "./CatRenderer";
+import type { ArSession } from "../ar/ArSession";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -26,6 +27,27 @@ const EXPOSURE = 1.15; // matches model-viewer exposure
 const VIEW_AZIMUTH_DEG = 66; // azimuth around the model (was 90 = too side-on)
 const VIEW_POLAR_DEG = 85; // polar from +Y, == model-viewer camera-orbit phi
 const FIT_MARGIN = 1.6; // >1 pulls the camera back so the cat isn't cropped
+
+/** How to seat the cat on the tracked marker (P2.3). All tunable on real
+ *  hardware — the marker frame's exact axes can't be verified headless. */
+export interface EnterArOpts {
+  /**
+   * Cat height as a fraction of the marker-card width (the post-matrix makes
+   * 1 unit == 1 card width and the model is ~1.9 units, so apparent height ≈
+   * 1.9·scale card-widths). 0.5 ⇒ roughly one card-width tall.
+   */
+  scale?: number;
+  /**
+   * Degrees about X to stand the Y-up model up onto the card. +90 maps model-up
+   * (+Y) → the card normal (+Z). Flip the sign if the cat ends up upside-down /
+   * sunk into the card on real hardware.
+   */
+  rotXDeg?: number;
+  /** Degrees about Y (yaw) if the cat faces away from the viewer on the card. */
+  rotYDeg?: number;
+  /** Lift along the card normal (+Z, card-width units) so the feet sit on top. */
+  lift?: number;
+}
 
 export interface ThreeCatRendererOpts {
   /** GLB url. Defaults to the app's character GLB under BASE_URL. */
@@ -57,6 +79,14 @@ export class ThreeCatRenderer implements CatRenderer {
   private readonly fitMargin: number;
   private rafId = 0;
   private readonly onResize = () => this.resize();
+
+  // AR mode (P2.3): when active, the cat is reparented under the tracked anchor
+  // and the camera renders over the live feed using the session's projection.
+  private arSession: ArSession | null = null;
+  private arEntering = false; // enterAR() is awaiting start() (sync re-entrancy guard)
+  private arMount: THREE.Group | null = null;
+  private readonly savedCamPos = new THREE.Vector3();
+  private readonly savedCamQuat = new THREE.Quaternion();
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -212,8 +242,137 @@ export class ThreeCatRenderer implements CatRenderer {
     this.rafId = requestAnimationFrame(tick);
   }
 
+  // ---- AR mode (P2.3) ----
+
+  /** Whether AR mode is currently active. */
+  isAR(): boolean {
+    return this.arSession !== null;
+  }
+
+  /** Debug/introspection: the camera's current framing (handy when tuning AR
+   *  alignment against a real card, and asserted by the AR smoke harness). */
+  cameraState(): { fov: number; near: number; far: number; isAR: boolean } {
+    return {
+      fov: this.camera.fov,
+      near: this.camera.near,
+      far: this.camera.far,
+      isAR: this.isAR(),
+    };
+  }
+
+  /**
+   * Enter image-target AR: start the tracker, then reparent THIS cat under the
+   * tracked anchor and switch to the AR camera (at the origin, projection from
+   * the session — the tracked worldMatrix bakes in the view). `start()` runs
+   * FIRST so a permission denial / load failure rejects with the fallback view
+   * still intact (the cat isn't reparented until tracking is live; the session
+   * releases its own camera/tracker on failure, and we belt-and-suspenders
+   * `stop()` it anyway). The `arEntering` flag is a SYNCHRONOUS re-entrancy guard
+   * so a double-tap on the AR button can't pass the guard twice during the
+   * multi-second `start()` await; exitAR()/dispose() during that await cancel it.
+   * The host shows `session.video()` behind the (transparent) canvas as the AR
+   * backdrop.
+   */
+  async enterAR(session: ArSession, opts: EnterArOpts = {}): Promise<void> {
+    if (this.arSession || this.arEntering) return; // already in / entering AR
+    this.arEntering = true;
+    try {
+      await session.start(); // throws on denial/failure — fallback view untouched
+    } catch (e) {
+      this.arEntering = false;
+      void session.stop(); // release anything start() opened before it threw
+      throw e;
+    }
+    // exitAR()/dispose() during the await cleared the flag → honour the cancel:
+    // don't enter, and release the now-started session.
+    if (!this.arEntering) {
+      void session.stop();
+      return;
+    }
+    this.arSession = session;
+    this.arEntering = false;
+
+    // Drop mouse-orbit; the camera is now driven by the tracked pose.
+    this.controls?.dispose();
+    this.controls = null;
+
+    // Mount that seats the Y-up cat on the card: stand up (rotX) + optional yaw,
+    // scaled to a fraction of the card width, lifted along the card normal.
+    const scale = opts.scale ?? 0.5;
+    const mount = new THREE.Group();
+    mount.rotation.set(
+      THREE.MathUtils.degToRad(opts.rotXDeg ?? 90),
+      THREE.MathUtils.degToRad(opts.rotYDeg ?? 0),
+      0
+    );
+    mount.scale.setScalar(scale);
+    mount.position.set(0, 0, opts.lift ?? 0);
+
+    // Reparent the SAME CatModel (keeps its animation/face state) into the anchor.
+    this.scene.remove(this.cat.object3D);
+    mount.add(this.cat.object3D);
+    const anchor = session.anchor();
+    anchor.add(mount);
+    this.scene.add(anchor);
+    this.arMount = mount;
+
+    // AR camera: origin, looking -Z (GL convention the worldMatrix assumes).
+    this.savedCamPos.copy(this.camera.position);
+    this.savedCamQuat.copy(this.camera.quaternion);
+    this.camera.position.set(0, 0, 0);
+    this.camera.quaternion.identity();
+    this.applyArProjection();
+  }
+
+  /** Derive the AR camera's fov/near/far from the session's GL projection and the
+   *  canvas aspect (the intrinsics are centred, so a symmetric three frustum +
+   *  a CSS-cover video matches mind-ar's own resize math). */
+  private applyArProjection(): void {
+    const proj = this.arSession?.cameraProjectionMatrix();
+    if (!proj) return;
+    this.camera.fov = (2 * Math.atan(1 / proj[5]) * 180) / Math.PI;
+    this.camera.near = proj[14] / (proj[10] - 1);
+    this.camera.far = proj[14] / (proj[10] + 1);
+    this.camera.aspect = this.aspect();
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** Leave AR: stop the tracker, restore the framed fallback view + orbit. */
+  exitAR(): void {
+    // An enterAR() is mid-flight (still awaiting start()): cancel it — its
+    // post-await check sees the cleared flag and releases the session itself.
+    if (this.arEntering) {
+      this.arEntering = false;
+      return;
+    }
+    const session = this.arSession;
+    if (!session) return;
+    this.arSession = null;
+    void session.stop();
+
+    const anchor = session.anchor();
+    if (this.arMount) {
+      this.arMount.remove(this.cat.object3D);
+      anchor.remove(this.arMount);
+      this.arMount = null;
+    }
+    this.scene.remove(anchor);
+    this.scene.add(this.cat.object3D);
+
+    // Restore the fallback camera (FOV/near/far it was constructed with) + framing.
+    this.camera.fov = FOV;
+    this.camera.near = 0.01;
+    this.camera.far = 100;
+    this.camera.position.copy(this.savedCamPos);
+    this.camera.quaternion.copy(this.savedCamQuat);
+    this.camera.aspect = this.aspect();
+    this.camera.updateProjectionMatrix();
+    this.setupControls();
+  }
+
   /** Stop the render loop and release GPU resources. */
   dispose(): void {
+    if (this.arSession || this.arEntering) this.exitAR();
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
     window.removeEventListener("resize", this.onResize);
