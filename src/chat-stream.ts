@@ -16,7 +16,7 @@
 // don't retry once chunks have started — the bubble already has
 // half a reply on it, retrying would duplicate text.
 
-import { bus, EVT } from "./bus.js";
+import { bus, EVT } from "./bus";
 
 const SSE_PREFIX = "data:";
 const RETRY_DELAY_MS = 600;

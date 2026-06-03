@@ -10,13 +10,26 @@
 //   composites.configure({ playAnim, emote, sayLine, audio, ... });
 //   composites.play("think");      // returns ms duration
 
-const cfg = {
+// The host (main.js) injects these via configure(); the no-op defaults keep
+// composites callable before wiring. Typed permissively — every callback is a
+// thin pass-through to main.js, and `audio` is the whole SFX module by name.
+type AnyFn = (...args: any[]) => void;
+interface CompositeConfig {
+  playAnim: AnyFn;
+  emote: AnyFn;
+  sayLine: AnyFn;
+  audio: Record<string, AnyFn | undefined>;
+  faceToward: AnyFn;
+  busyUntil: AnyFn;
+}
+
+const cfg: CompositeConfig = {
   playAnim: () => {},
   emote: () => {},
   sayLine: () => {},
   audio: {},
   faceToward: () => {},
-  busyUntil: (ms) => {},
+  busyUntil: () => {},
 };
 
 export function configure(opts) {

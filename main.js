@@ -14,12 +14,12 @@
  *
  * v4: this is an ES module. Audio + the event bus live in ./src/.
  */
-import { bus, EVT } from "./src/bus.js";
-import * as audio from "./src/audio.js";
-import { streamChat } from "./src/chat-stream.js";
-import * as particles from "./src/particles.js";
-import * as composites from "./src/composites.js";
-import * as hints from "./src/hints.js";
+import { bus, EVT } from "./src/bus";
+import * as audio from "./src/audio";
+import { streamChat } from "./src/chat-stream";
+import * as particles from "./src/particles";
+import * as composites from "./src/composites";
+import * as hints from "./src/hints";
 import { ModelViewerRenderer } from "./src/renderer/ModelViewerRenderer";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with

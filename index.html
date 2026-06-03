@@ -13,12 +13,10 @@
        is faster on slow networks. Also pre-fetch the worker so model-viewer
        can start parsing while the page is laying out. -->
   <link rel="preload" as="fetch" href="character_v2.glb" type="model/gltf-binary" crossorigin>
-  <link rel="modulepreload" href="src/bus.js">
-  <link rel="modulepreload" href="src/audio.js">
-  <link rel="modulepreload" href="src/chat-stream.js">
-  <link rel="modulepreload" href="src/particles.js">
-  <link rel="modulepreload" href="src/composites.js">
-  <link rel="modulepreload" href="src/hints.js">
+  <!-- No hand-written modulepreloads for src/*: Vite auto-injects modulepreload
+       links for the entry's real (hashed .js) chunks at build time. Hand-written
+       links pointing at the .ts source made Vite emit .ts-named assets, which a
+       static host serves as video/mp2t and browsers refuse as ES modules. -->
   <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
 </head>
 <body>
