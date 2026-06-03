@@ -24,6 +24,7 @@ import { createRenderer } from "./src/renderer/RendererFactory";
 import { canActivateAR } from "./src/renderer/capabilities";
 import { MindArSession } from "./src/ar/MindArSession";
 import { CatStateMachine } from "./src/anim/CatState";
+import { DialogueBox } from "./src/vn/DialogueBox";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -214,6 +215,13 @@ const catState = new CatStateMachine();
 // What we show / send to the LLM when the cat doesn't have a custom name yet.
 const DEFAULT_CAT_NAME = "喵喵";
 const catNameDisplay = () => life.catName || DEFAULT_CAT_NAME;
+
+// The galgame VN dialogue box (P3.1) — the primary on-screen speech surface
+// (name tab + typewriter). sayLine() + the chat stream render into it; the old
+// floating #sayBubble is superseded (hidden via vn-styles.css).
+const dialogue = new DialogueBox({ getName: catNameDisplay });
+// Dev-only handle so the VN-box smoke screenshot can drive it (stripped in prod).
+if (import.meta.env && import.meta.env.DEV) window.__dialogue = dialogue;
 
 let currentAnim   = "idle";
 let isMuted       = false;
@@ -1654,13 +1662,8 @@ async function speak(text) {
 let sayTimer = null;
 function sayLine(text) {
   if (!text) return;
-  if (sayTextEl) sayTextEl.textContent = text;
-  if (sayBubbleEl) sayBubbleEl.classList.add("show");
-  clearTimeout(sayTimer);
   const dwell = bubbleDwellMs(text);                        // time to read
-  sayTimer = setTimeout(() => {
-    if (sayBubbleEl) sayBubbleEl.classList.remove("show");
-  }, dwell);
+  dialogue.say(text, dwell);                                // VN box: name tab + typewriter
   duckBGM(0.35, dwell);                                     // let the voice cut through
   speak(text);
 }
@@ -2550,9 +2553,8 @@ async function sendChat(text) {
 async function tryStreaming(text) {
   const thinking = appendMsg("cat", "喵喵在想…", "thinking");
   emote("💭");
-  // Open the speech bubble empty so chars stream into it.
-  if (sayTextEl) sayTextEl.textContent = "";
-  if (sayBubbleEl) sayBubbleEl.classList.add("show");
+  // Open the VN dialogue box for streaming; the network paces the typewriter.
+  const stream = dialogue.beginStream();
 
   let reply = "";
   let envelope = null;
@@ -2563,9 +2565,7 @@ async function tryStreaming(text) {
     body: buildChatBody(text),
     onText: (delta) => {
       reply += delta;
-      // Append directly to the on-screen bubble. Cheap textContent +=
-      // since strings are short and DOM ops are coalesced by the browser.
-      if (sayTextEl) sayTextEl.textContent = reply;
+      stream.setText(reply); // VN box renders the accumulated reply
     },
     onEnvelope: (env) => {
       envelope = env;
@@ -2573,7 +2573,7 @@ async function tryStreaming(text) {
       // (e.g. retry path on the server). Trust it if it differs.
       if (env.reply && env.reply.length && env.reply !== reply) {
         reply = env.reply;
-        if (sayTextEl) sayTextEl.textContent = reply;
+        stream.setText(reply);
       }
     },
     onError: (err) => {
@@ -2584,7 +2584,7 @@ async function tryStreaming(text) {
 
   thinking.remove();
   if (failed && !reply) {
-    if (sayBubbleEl) sayBubbleEl.classList.remove("show");
+    dialogue.hide();
     catState.hold(400);                    // release the loop for the fallback path
     return false;
   }
@@ -2606,12 +2606,9 @@ async function tryStreaming(text) {
   const dwell = bubbleDwellMs(reply);
   duckBGM(0.35, dwell);
   speak(reply);
-  // Bubble auto-hides via the same timer as sayLine, but reset it here so the
-  // dwell window starts after the full reply has landed.
-  clearTimeout(sayTimer);
-  sayTimer = setTimeout(() => sayBubbleEl?.classList.remove("show"), dwell);
+  stream.end(dwell);                       // keep the VN box up for the read dwell, then hide
   // Release the loop, leaving a short read-tail so it doesn't barge in
-  // while the bubble is still up.
+  // while the box is still up.
   catState.hold(dwell);
   return true;
 }

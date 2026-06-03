@@ -1,0 +1,83 @@
+/* Galgame-style VN dialogue box (P3.1) — a bottom horizontal text band with a
+   name tab + typewriter body, sitting above the anim bar. The primary surface
+   for what the cat "says" (chat replies, scripted lines, story beats), replacing
+   the floating speech bubble's role. Mounted + driven by src/vn/DialogueBox.ts. */
+.vn-box {
+  position: fixed;
+  left: 50%;
+  bottom: 84px; /* clear of the anim bar (bottom:16px, ~64px tall) */
+  transform: translate(-50%, 14px);
+  width: min(92vw, 720px);
+  padding: 16px 22px 15px;
+  background: linear-gradient(180deg, rgba(28, 35, 48, 0.93), rgba(18, 24, 34, 0.95));
+  color: #f2f6fb;
+  border: 1.5px solid rgba(150, 200, 255, 0.22);
+  border-radius: 18px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 14; /* above anim-bar (10), below choices (18) */
+  transition: opacity 0.26s ease, transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.vn-box.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.vn-name {
+  position: absolute;
+  top: -14px;
+  left: 18px;
+  padding: 3px 15px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #ff9bbf, #ff7fa3);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 3px 12px rgba(255, 127, 163, 0.4);
+}
+.vn-body {
+  font-size: 16px;
+  line-height: 1.62;
+  min-height: 1.62em;
+  word-break: break-word;
+}
+.vn-caret {
+  margin-left: 1px;
+  opacity: 0.65;
+  animation: vn-blink 1s steps(1) infinite;
+}
+.vn-box.done .vn-caret {
+  display: none;
+}
+.vn-advance {
+  position: absolute;
+  right: 16px;
+  bottom: 8px;
+  font-size: 12px;
+  color: #9fd0ff;
+  opacity: 0;
+  pointer-events: none;
+  animation: vn-bob 1.15s ease-in-out infinite;
+}
+.vn-box.done .vn-advance {
+  opacity: 0.8;
+}
+@keyframes vn-blink {
+  50% { opacity: 0; }
+}
+@keyframes vn-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
+}
+
+/* The old floating bubble is superseded by the VN box — keep the element in the
+   DOM (harmless) but ensure it never paints. */
+#sayBubble { display: none !important; }
+
+@media (max-width: 560px) {
+  .vn-box { bottom: 92px; width: 94vw; padding: 14px 18px 13px; }
+  .vn-body { font-size: 15px; }
+}
