@@ -23,6 +23,7 @@ import * as hints from "./src/hints";
 import { createRenderer } from "./src/renderer/RendererFactory";
 import { canActivateAR } from "./src/renderer/capabilities";
 import { MindArSession } from "./src/ar/MindArSession";
+import { GreenBlobSession } from "./src/ar/GreenBlobSession";
 import { CatStateMachine } from "./src/anim/CatState";
 import { DialogueBox } from "./src/vn/DialogueBox";
 import { Choices } from "./src/vn/Choices";
@@ -1429,7 +1430,11 @@ function tickFace() {
 function faceToward(clientX, clientY) {
   const w = window.innerWidth  || modelViewer.clientWidth  || 1;
   const h = window.innerHeight || modelViewer.clientHeight || 1;
-  const rx = (clientX / w) * 2 - 1;             // -1 (left) … +1 (right)
+  // Yaw is relative to the cat's actual screen x (so an off-centre AR cat turns
+  // TOWARD the tap, not toward screen-centre). Falls back to centre off-AR.
+  const c = catScreenCenter();
+  const cx = c ? c.x : w / 2;
+  const rx = (clientX - cx) / (w / 2);          // -1 (left) … +1 (right) of the cat
   faceYawTarget = Math.max(-32, Math.min(32, rx * 34));
   // Optional pitch — only when caller supplied a Y. Negative ry means tap
   // is above center, so cat tilts UP (positive pitch). Capped narrower than
@@ -1471,11 +1476,25 @@ function isUIElement(target) {
             target.closest?.(".status-panel") || target.closest?.(".cfg-panel"));
 }
 
-// model-viewer positions the cat near horizontal center; treat the
-// vertical middle 60% as "near the cat" so taps in the bottom-bar
-// region or far-top stars count as "look at" instead of pets.
+// The cat's current on-screen centre. In green-block AR the cat follows the
+// tracked green ANYWHERE on screen, so hit-test against its real position
+// (GreenBlobSession.screenPos); every other mode keeps model-viewer's
+// near-horizontal-centre assumption.
+function catScreenCenter() {
+  if (arMode && !useMindAr && arSession && typeof arSession.screenPos === "function") {
+    const p = arSession.screenPos();
+    if (p) return p;
+  }
+  return null;
+}
+
 function isNearCat(x, y) {
   const w = window.innerWidth, h = window.innerHeight;
+  const c = catScreenCenter();
+  if (c) {
+    // Generous radius around where the cat actually is (it's rendered large).
+    return Math.hypot(x - c.x, y - c.y) < Math.min(w, h) * 0.3;
+  }
   return Math.abs(x - w / 2) < w * 0.35 &&
          y > h * 0.25 && y < h * 0.85;
 }
@@ -2188,28 +2207,64 @@ async function swapCamera() {
 }
 
 // =====================================================================
-// Desktop MindAR image-target REAL AR (P2.3). On the three.js backend with a
-// camera + secure context, 📸 enters MindAR (the cat anchors onto the marker
-// card) instead of the model-viewer camera-passthrough. The heavy mind-ar
-// runtime is lazy-loaded only on first enter. Seating (scale/stand-up/lift) is
-// tunable — defaults are a first guess to refine against a real card.
+// Desktop REAL AR (P2.3). On the three.js backend with a camera + secure
+// context, 📸 enters AR (the cat anchors onto a real-world marker) instead of
+// the model-viewer camera-passthrough.
+//
+// DEFAULT backend = GREEN-BLOCK COLOUR DETECTION: find a pure-green region in
+// the feed and seat the cat on it. This is robust where MindAR's feature-point
+// image tracking can't lock (a marker card shown on a phone screen — glare /
+// moiré / small / angled — which is what failed on the first hardware test; a
+// solid colour block also has ZERO features, so it could never be a MindAR
+// target). MindAR image-target tracking is still available via ?ar=mind.
+//
+// Seating + detection are tunable live (defaults refine against real hardware):
+//   ?sc=  cat size multiplier      ?rx= / ?ry=  mount pitch / yaw (deg)
+//   ?lift= mount lift              ?gk= size-from-green gain   ?fov= / ?depth=
 // =====================================================================
-const AR_SEATING = { scale: 0.5, rotXDeg: 90, rotYDeg: 0, lift: 0 };
+const arQuery = new URLSearchParams(location.search);
+const useMindAr = arQuery.get("ar") === "mind";
+// optNum → undefined when the param is absent (so GreenBlobSession opts fall
+// back to their own defaults); numParam → a concrete fallback for seating.
+const optNum = (k) => { const v = arQuery.get(k); if (v == null || v === "") return undefined; const n = Number(v); return Number.isNaN(n) ? undefined : n; };
+const numParam = (k, d) => { const v = optNum(k); return v == null ? d : v; };
+// Green mode stands the cat upright facing the viewer (rotX/rotY 0); size comes
+// from the detected blob so the mount scale stays 1. MindAR mode lays the cat
+// onto the flat card (rotX 90).
+const AR_SEATING = useMindAr
+  ? { scale: numParam("sc", 0.5), rotXDeg: numParam("rx", 90), rotYDeg: numParam("ry", 0), lift: numParam("lift", 0) }
+  // Green mode: a gentle 22° yaw gives the flattering 3/4 read the fallback view
+  // (azimuth 66°) has — a dead-front cat looked "different" head-on. ?ry=0 = face-on.
+  : { scale: numParam("sc", 1), rotXDeg: numParam("rx", 0), rotYDeg: numParam("ry", 22), lift: numParam("lift", 0) };
 const arCapable = () => rendererBackend === "three" && canActivateAR();
 let arSession = null;
 let arMode = false;
 let arHintEl = null;
+
+function makeArSession() {
+  if (useMindAr) return new MindArSession();
+  return new GreenBlobSession({
+    fovDeg: optNum("fov"),
+    depth: optNum("depth"),
+    sizeK: optNum("gk"),
+    smooth: optNum("gsm"),
+  });
+}
 
 function ensureArHint() {
   if (arHintEl) return arHintEl;
   const base = (import.meta.env && import.meta.env.BASE_URL) || "/";
   arHintEl = document.createElement("div");
   arHintEl.id = "arHint";
-  arHintEl.innerHTML =
-    '<div class="ar-hint-card">' +
-    '<img src="' + base + 'targets/miao-card.png" alt="标记卡" />' +
-    "<p>把这张标记卡对准摄像头<br>用另一台手机打开它，或打印出来</p>" +
-    "</div>";
+  arHintEl.innerHTML = useMindAr
+    ? '<div class="ar-hint-card">' +
+      '<img src="' + base + 'targets/miao-card.png" alt="标记卡" />' +
+      "<p>把这张标记卡对准摄像头<br>用另一台手机打开它，或打印出来</p>" +
+      "</div>"
+    : '<div class="ar-hint-card">' +
+      '<div class="ar-hint-swatch"></div>' +
+      "<p>给我看一块<b>纯绿色</b><br>另一台手机开一张纯绿图对准镜头</p>" +
+      "</div>";
   document.body.appendChild(arHintEl);
   return arHintEl;
 }
@@ -2219,7 +2274,7 @@ const hideArHint = () => { if (arHintEl) arHintEl.classList.remove("show"); };
 async function enterArMode() {
   if (arMode) return;
   if (!arSession) {
-    arSession = new MindArSession();
+    arSession = makeArSession();
     arSession.onFound(() => { hideArHint(); emote("✨"); showStatus("找到你啦，我出来咯～", 2200); });
     arSession.onLost(() => { showArHint(); });
   }
@@ -2238,7 +2293,9 @@ async function enterArMode() {
   if (camBtn) { camBtn.textContent = "✕"; camBtn.classList.add("active"); }
   bumpInteract();
   showArHint();
-  sayLine(pickFrom(["把卡片对准我，我就出来啦！", "喵～对准标记卡看看！"]));
+  sayLine(useMindAr
+    ? pickFrom(["把卡片对准我，我就出来啦！", "喵～对准标记卡看看！"])
+    : pickFrom(["给我看一块纯绿色，我就出现啦！", "喵～拿块绿色的东西对准镜头！"]));
 }
 
 function exitArMode() {

@@ -316,6 +316,11 @@ export class ThreeCatRenderer implements CatRenderer {
     this.scene.add(anchor);
     this.arMount = mount;
 
+    // Hide the contact shadow when the cat stands upright (colour-marker AR): the
+    // horizontal shadow plane would be edge-on to the level camera with no ground
+    // under it. Keep it for the laid-flat card case (rotX≈90, MindAR).
+    this.cat.setContactShadowVisible(Math.abs(opts.rotXDeg ?? 90) > 45);
+
     // AR camera: origin, looking -Z (GL convention the worldMatrix assumes).
     this.savedCamPos.copy(this.camera.position);
     this.savedCamQuat.copy(this.camera.quaternion);
@@ -358,6 +363,7 @@ export class ThreeCatRenderer implements CatRenderer {
     }
     this.scene.remove(anchor);
     this.scene.add(this.cat.object3D);
+    this.cat.setContactShadowVisible(true); // restore for the fallback view
 
     // Restore the fallback camera (FOV/near/far it was constructed with) + framing.
     this.camera.fov = FOV;

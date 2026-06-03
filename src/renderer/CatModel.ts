@@ -17,7 +17,8 @@ import type { FaceConfig } from "./CatRenderer";
  * The GLB requires KHR_draco_mesh_compression, so a DRACOLoader is mandatory.
  */
 
-const FADE = 0.25; // s — clip cross-fade
+const FADE = 0.25; // s — cross-fade for ambient LOOPS (idle/walk/run/sleep)
+const ONESHOT_FADE = 0.06; // s — near-instant for one-shots so they read crisp
 const FALLBACK_DUR = 1.2; // s — when a clip duration is unknown
 
 export interface CatModelOpts {
@@ -114,13 +115,18 @@ export class CatModel {
     action.clampWhenFinished = !loop; // one-shots hold their last frame
     action.setEffectiveTimeScale(1);
     action.enabled = true;
-    action.fadeIn(FADE);
+    // One-shots (attack/jump/wave/pounce…) snap in near-instantly so they read
+    // crisp like the old model-viewer hard-cut; only the ambient loops
+    // (idle↔walk↔run↔sleep) keep a smooth cross-fade. A 0.25s fade on every
+    // switch made reactive actions feel mushy at their start.
+    const fade = loop ? FADE : ONESHOT_FADE;
+    action.fadeIn(fade);
     action.play();
 
     // Fade out every OTHER action still influencing the pose, so rapid switches
     // (A→B→C inside one fade window) don't pile up blended weight.
     for (const other of this.actions.values()) {
-      if (other !== action && other.isRunning()) other.fadeOut(FADE);
+      if (other !== action && other.isRunning()) other.fadeOut(fade);
     }
     this.currentAction = action;
   }
@@ -173,6 +179,13 @@ export class CatModel {
 
   hasFace(name: string): boolean {
     return this.faces.has(name);
+  }
+
+  /** Show/hide the soft contact shadow. The AR host hides it when the cat stands
+   *  upright on a colour marker (the horizontal shadow plane would be edge-on to
+   *  a level camera with no real ground beneath — a useless dark sliver). */
+  setContactShadowVisible(v: boolean): void {
+    if (this.contactShadow) this.contactShadow.visible = v;
   }
 
   setFace(name: string): void {

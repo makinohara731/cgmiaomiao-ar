@@ -333,6 +333,14 @@ body.ar-mode .env-layer { display: none; }
   border-radius: 10px; display: block;
   margin: 0 auto 6px;
 }
+/* pure-green reference swatch for the colour-detection AR backend */
+.ar-hint-swatch {
+  width: 128px; height: 128px;
+  border-radius: 10px; display: block;
+  margin: 0 auto 6px;
+  background: #00d800;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .25);
+}
 
 /* === Storybook environment — sky / sun-moon / hills / trees / grass === */
 .env-layer {
