@@ -5,10 +5,21 @@
  * hiding the concrete renderer behind this interface lets a later phase swap
  * the model-viewer backend for a three.js one without touching any caller.
  *
- * Scope grows in stages: P1.2 animation only; P2.4 adds orientation (face-toward)
- * and the pointer-interaction target so the three.js backend reaches parity.
- * Facial-expression texture swaps still fold in next (see docs/进度.md).
+ * Scope grows in stages: P1.2 animation only; P2.4a orientation (face-toward) +
+ * the pointer-interaction target; P2.4b facial expressions (head-texture swap).
  */
+
+/** Config for the facial-expression system (P2.4b). */
+export interface FaceConfig {
+  /**
+   * Expression name → texture URL (relative to BASE_URL). The neutral face
+   * ("open") is NOT listed here — it's captured from the GLB's own head texture.
+   */
+  variants: Record<string, string>;
+  /** Name of the head material (and/or mesh) carrying the face atlas, e.g. "root.3". */
+  headMaterial: string;
+}
+
 export interface CatRenderer {
   /** All clip names the loaded model exposes. */
   getClips(): string[];
@@ -29,4 +40,15 @@ export interface CatRenderer {
   setOrientation(yawDeg: number, pitchDeg: number): void;
   /** The DOM element that pointer/petting listeners should attach to. */
   getInteractionTarget(): HTMLElement;
+  /**
+   * Initialise the facial-expression system: find the head material, capture
+   * its neutral texture as "open", and load the variant textures. Idempotent;
+   * resolves when done (variants that fail to load are simply absent). The
+   * backend owns the texture loading + the head-material reference.
+   */
+  loadFaces(config: FaceConfig): Promise<void>;
+  /** Whether a named face is available to show ("open" once the head is found). */
+  hasFace(name: string): boolean;
+  /** Swap the head to a named face ("open" = neutral). No-ops if not ready. */
+  setFace(name: string): void;
 }

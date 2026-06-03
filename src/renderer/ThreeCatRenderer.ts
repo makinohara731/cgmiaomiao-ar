@@ -1,4 +1,4 @@
-import type { CatRenderer } from "./CatRenderer";
+import type { CatRenderer, FaceConfig } from "./CatRenderer";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
@@ -190,6 +190,88 @@ export class ThreeCatRenderer implements CatRenderer {
     return this.canvas;
   }
 
+  // ---- Facial expressions (head material `.map` swap) ----
+  private headMaterial: THREE.MeshStandardMaterial | null = null;
+  private neutralMap: THREE.Texture | null = null;
+  private readonly faces = new Map<string, THREE.Texture | null>();
+
+  async loadFaces(config: FaceConfig): Promise<void> {
+    if (!this.root || this.headMaterial) return; // not loaded yet, or already done
+    const head = this.findMaterial(this.root, config.headMaterial);
+    if (!head) {
+      console.warn("ThreeCatRenderer: head material not found —", config.headMaterial);
+      return;
+    }
+    this.headMaterial = head;
+    this.neutralMap = head.map; // the GLB's own face texture
+    this.faces.set("open", this.neutralMap);
+
+    const base = (import.meta as any).env?.BASE_URL ?? "/";
+    const loader = new THREE.TextureLoader();
+    await Promise.all(
+      Object.entries(config.variants).map(([name, url]) =>
+        loader
+          .loadAsync(base + url)
+          .then((tex) => {
+            this.tuneFaceTexture(tex);
+            this.faces.set(name, tex); // best-effort: a failed load just stays absent
+          })
+          .catch(() => undefined)
+      )
+    );
+  }
+
+  hasFace(name: string): boolean {
+    return this.faces.has(name);
+  }
+
+  setFace(name: string): void {
+    if (!this.headMaterial || !this.faces.has(name)) return;
+    // Swap the base-colour map to the variant (already GPU-uploaded at load).
+    // No material.needsUpdate: the maps are same-type/encoding so no shader
+    // define changes, and refreshUniformsCommon re-reads .map every frame —
+    // flagging the material would force a needless per-blink program re-eval.
+    this.headMaterial.map = this.faces.get(name) ?? this.neutralMap;
+  }
+
+  /** Find the first MeshStandardMaterial named `name` (or on a mesh named `name`). */
+  private findMaterial(root: THREE.Object3D, name: string): THREE.MeshStandardMaterial | null {
+    let byName: THREE.MeshStandardMaterial | null = null;
+    let byMesh: THREE.MeshStandardMaterial | null = null;
+    root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.material) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of mats) {
+        const sm = m as THREE.MeshStandardMaterial;
+        if (m.name === name && !byName) byName = sm;
+        if (mesh.name === name && !byMesh) byMesh = sm;
+      }
+    });
+    return byName || byMesh;
+  }
+
+  /** Match the GLB head texture's sampler so a swapped atlas lines up with the
+   *  head UVs (TextureLoader defaults to flipY=true; glTF base maps are sRGB,
+   *  flipY=false). */
+  private tuneFaceTexture(tex: THREE.Texture): void {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.flipY = false;
+    const n = this.neutralMap;
+    if (n) {
+      // Copy the GLB head texture's full sampler so the atlas matches exactly
+      // (wrap/filter/anisotropy/mips) rather than relying on TextureLoader defaults.
+      tex.wrapS = n.wrapS;
+      tex.wrapT = n.wrapT;
+      tex.minFilter = n.minFilter;
+      tex.magFilter = n.magFilter;
+      tex.anisotropy = n.anisotropy;
+      tex.generateMipmaps = n.generateMipmaps;
+      tex.channel = n.channel;
+    }
+    tex.needsUpdate = true;
+  }
+
   // ---- internals ----
 
   private onLoaded(gltf: { scene: THREE.Object3D; animations: THREE.AnimationClip[] }): void {
@@ -317,6 +399,14 @@ export class ThreeCatRenderer implements CatRenderer {
     }
     (this.scene.environment as THREE.Texture | null)?.dispose();
     this.scene.environment = null;
+    // Free the runtime-loaded face variants (the neutral map belongs to the GLB
+    // and is freed by disposeObject above).
+    for (const tex of this.faces.values()) {
+      if (tex && tex !== this.neutralMap) tex.dispose();
+    }
+    this.faces.clear();
+    this.headMaterial = null;
+    this.neutralMap = null;
     this.mixer = null;
     this.currentAction = null;
     this.actions.clear();

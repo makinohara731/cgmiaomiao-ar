@@ -1,4 +1,14 @@
-import type { CatRenderer } from "./CatRenderer";
+import type { CatRenderer, FaceConfig } from "./CatRenderer";
+
+/** A model-viewer material texture-info: `.texture` reads it, `.setTexture()` swaps it. */
+interface MVTextureInfo {
+  texture: unknown;
+  setTexture(tex: unknown): void;
+}
+interface MVMaterial {
+  name: string;
+  pbrMetallicRoughness: { baseColorTexture: MVTextureInfo };
+}
 
 /**
  * Minimal view of the <model-viewer> element this adapter touches. The element
@@ -12,6 +22,8 @@ interface ModelViewerEl extends HTMLElement {
   currentTime: number;
   updateComplete: Promise<unknown>;
   play(opts?: { repetitions?: number }): void;
+  model?: { materials: MVMaterial[] };
+  createTexture(url: string): Promise<unknown>;
 }
 
 /**
@@ -62,5 +74,39 @@ export class ModelViewerRenderer implements CatRenderer {
 
   getInteractionTarget(): HTMLElement {
     return this.mv;
+  }
+
+  // ---- Facial expressions (head base-colour texture swap) ----
+  private headTex: MVTextureInfo | null = null;
+  private readonly faces = new Map<string, unknown>();
+
+  async loadFaces(config: FaceConfig): Promise<void> {
+    const mats = this.mv.model?.materials;
+    if (!mats) return;
+    const mat = mats.find((m) => m.name === config.headMaterial) || mats[3];
+    if (!mat) return;
+    this.headTex = mat.pbrMetallicRoughness.baseColorTexture;
+    this.faces.set("open", this.headTex.texture); // the GLB's own neutral face
+    for (const [name, url] of Object.entries(config.variants)) {
+      // Best-effort per variant: a missing webp just leaves that face absent.
+      try {
+        this.faces.set(name, await this.mv.createTexture(url));
+      } catch {
+        /* variant unavailable */
+      }
+    }
+  }
+
+  hasFace(name: string): boolean {
+    return this.faces.has(name);
+  }
+
+  setFace(name: string): void {
+    if (!this.headTex || !this.faces.has(name)) return;
+    try {
+      this.headTex.setTexture(this.faces.get(name));
+    } catch {
+      /* scene-graph API unavailable */
+    }
   }
 }

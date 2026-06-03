@@ -1488,29 +1488,28 @@ bus.on(EVT.BondUnlock, () => {
 // eye variant. The sprite blinks on its own at a natural cadence and
 // keeps its eyes shut while it sleeps.
 // =====================================================================
-let eyesOpenTex = null, eyesClosedTex = null, eyesHappyTex = null, eyesSadTex = null;
-let eyesSurpriseTex = null, eyesLoveTex = null, eyesCryTex = null;   // v5 expressions
-let headTexInfo = null;
-let currentExpression = "open";     // open / blink / happy / sad
+let currentExpression = "open";     // open / blink / happy / sad / surprise / love / cry
 let blinkReady = false;
 let blinkTimer = null;
 let expressionResetTimer = null;
 
+// Face-atlas variants loaded at runtime, on top of the GLB's own neutral "open"
+// face. The renderer owns the texture loading + the Head material swap (both
+// model-viewer and three.js); main.js keeps the cadence (blink), the fallback
+// chains, and the flash timing.
+const FACE_VARIANTS = {
+  blink:    "textures/face_blink.webp",
+  happy:    "textures/face_happy.webp",
+  sad:      "textures/face_sad.webp",
+  surprise: "textures/face_surprise.webp",
+  love:     "textures/face_love.webp",
+  cry:      "textures/face_cry.webp",
+};
+
 async function initBlink() {
   try {
-    const mats = modelViewer.model && modelViewer.model.materials;
-    if (!mats) return;
-    const mat = mats.find((m) => m.name === "root.3") || mats[3];   // root.3 = Head
-    headTexInfo = mat.pbrMetallicRoughness.baseColorTexture;
-    eyesOpenTex = headTexInfo.texture;
-    eyesClosedTex = await modelViewer.createTexture("textures/face_blink.webp");
-    // happy + sad load best-effort; if either fails the runtime degrades gracefully
-    try { eyesHappyTex = await modelViewer.createTexture("textures/face_happy.webp"); } catch (_) {}
-    try { eyesSadTex   = await modelViewer.createTexture("textures/face_sad.webp"); }   catch (_) {}
-    // v5 expressions — best-effort; setExpression falls back if any failed to load
-    try { eyesSurpriseTex = await modelViewer.createTexture("textures/face_surprise.webp"); } catch (_) {}
-    try { eyesLoveTex     = await modelViewer.createTexture("textures/face_love.webp"); }     catch (_) {}
-    try { eyesCryTex      = await modelViewer.createTexture("textures/face_cry.webp"); }      catch (_) {}
+    await renderer.loadFaces({ variants: FACE_VARIANTS, headMaterial: "root.3" }); // root.3 = Head
+    if (!renderer.hasFace("open")) return;     // head material not found → eyes stay open
     blinkReady = true;
     if (life.asleep) setExpression("blink");
     scheduleBlink();
@@ -1519,21 +1518,19 @@ async function initBlink() {
   }
 }
 
-// Swap the face atlas. "open" = the GLB's own texture; others are
-// runtime-loaded variants.
+// Swap the face atlas. "open" = the GLB's own texture; others are runtime-loaded
+// variants. Fallback chains resolve against what actually loaded (hasFace), so a
+// missing webp degrades gracefully instead of showing a blank face.
 function setExpression(name) {
   if (!blinkReady || name === currentExpression) return;
-  let tex = eyesOpenTex;
-  if      (name === "blink")    tex = eyesClosedTex;
-  else if (name === "happy")    tex = eyesHappyTex || eyesClosedTex;   // fallback to blink
-  else if (name === "sad")      tex = eyesSadTex   || eyesOpenTex;     // fallback to open
-  else if (name === "surprise") tex = eyesSurpriseTex || eyesOpenTex;
-  else if (name === "love")     tex = eyesLoveTex     || eyesHappyTex || eyesOpenTex;
-  else if (name === "cry")      tex = eyesCryTex      || eyesSadTex   || eyesOpenTex;
-  try {
-    headTexInfo.setTexture(tex);
-    currentExpression = name;
-  } catch (_) { /* scene-graph API unavailable */ }
+  let resolved = name;
+  if      (name === "happy"    && !renderer.hasFace("happy"))    resolved = "blink";
+  else if (name === "sad"      && !renderer.hasFace("sad"))      resolved = "open";
+  else if (name === "surprise" && !renderer.hasFace("surprise")) resolved = "open";
+  else if (name === "love"     && !renderer.hasFace("love"))     resolved = renderer.hasFace("happy") ? "happy" : "open";
+  else if (name === "cry"      && !renderer.hasFace("cry"))      resolved = renderer.hasFace("sad") ? "sad" : "open";
+  renderer.setFace(resolved);
+  currentExpression = name;     // track the REQUESTED name (doBlink only blinks from "open")
 }
 
 // Older callers still use setEyes(true|false) — keep the wrapper.
