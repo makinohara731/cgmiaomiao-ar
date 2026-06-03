@@ -276,7 +276,7 @@ model-viewer {
   z-index: 1;
   display: block;
   background: transparent;
-  touch-action: pan-y;
+  touch-action: none; /* OrbitControls owns touch gestures on the 3D canvas */
 }
 .renderer-hidden { display: none !important; }
 

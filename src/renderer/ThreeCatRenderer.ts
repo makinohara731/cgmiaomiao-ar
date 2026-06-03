@@ -33,6 +33,11 @@ const FOV = 30; // deg — matches model-viewer field-of-view
 const EXPOSURE = 1.15; // matches model-viewer exposure
 const FADE = 0.25; // s — clip cross-fade
 const FALLBACK_DUR = 1.2; // s — when a clip duration is unknown
+// Camera framing — tuned (P2.4d) so the default view matches model-viewer's
+// (idle facing + size). Dev-overridable via ?az=&ph=&mg= for tuning sweeps.
+const VIEW_AZIMUTH_DEG = 66; // azimuth around the model (was 90 = too side-on)
+const VIEW_POLAR_DEG = 85; // polar from +Y, == model-viewer camera-orbit phi
+const FIT_MARGIN = 1.6; // >1 pulls the camera back so the cat isn't cropped
 
 export interface ThreeCatRendererOpts {
   /** GLB url. Defaults to the app's character GLB under BASE_URL. */
@@ -60,9 +65,13 @@ export class ThreeCatRenderer implements CatRenderer {
   private currentAction: THREE.AnimationAction | null = null;
   private root: THREE.Object3D | null = null;
   private pivot: THREE.Group | null = null;
+  private contactShadow: THREE.Mesh | null = null;
   private controls: OrbitControls | null = null;
   private readonly target = new THREE.Vector3();
   private readonly enableControls: boolean;
+  private readonly viewAzimuth: number;
+  private readonly viewPolar: number;
+  private readonly fitMargin: number;
   private ready = false;
   private rafId = 0;
   private readonly onResize = () => this.resize();
@@ -72,6 +81,11 @@ export class ThreeCatRenderer implements CatRenderer {
     opts: ThreeCatRendererOpts = {}
   ) {
     this.enableControls = opts.enableControls !== false;
+    // Dev tuning overrides: ?az=<azimuth>&ph=<polar>&mg=<fit-margin>.
+    const q = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
+    this.viewAzimuth = q.has("az") ? Number(q.get("az")) : VIEW_AZIMUTH_DEG;
+    this.viewPolar = q.has("ph") ? Number(q.get("ph")) : VIEW_POLAR_DEG;
+    this.fitMargin = q.has("mg") ? Number(q.get("mg")) : FIT_MARGIN;
     const base = (import.meta as any).env?.BASE_URL ?? "/";
     const src = opts.src ?? base + "character_v2.glb";
     const dracoPath = opts.dracoPath ?? base + "draco/";
@@ -302,6 +316,7 @@ export class ThreeCatRenderer implements CatRenderer {
     pivot.updateMatrixWorld(true);
 
     this.frameTo(pivot);
+    this.addContactShadow(pivot);
     this.setupControls();
     this.ready = true;
 
@@ -321,11 +336,12 @@ export class ThreeCatRenderer implements CatRenderer {
 
     // Distance so the model fits the 30° vertical FOV (with margin).
     const fitDist = (maxDim * 0.5) / Math.tan((FOV * 0.5 * Math.PI) / 180);
-    const r = fitDist * 1.35;
+    const r = fitDist * this.fitMargin;
 
-    // model-viewer camera-orbit="90deg 85deg": theta=azimuth, phi=polar-from-+Y.
-    const theta = (90 * Math.PI) / 180;
-    const phi = (85 * Math.PI) / 180;
+    // Spherical placement: theta = azimuth, phi = polar from +Y (model-viewer
+    // camera-orbit convention), tuned in P2.4d to match its default view.
+    const theta = THREE.MathUtils.degToRad(this.viewAzimuth);
+    const phi = THREE.MathUtils.degToRad(this.viewPolar);
     this.camera.position.set(
       center.x + r * Math.sin(phi) * Math.sin(theta),
       center.y + r * Math.cos(phi),
@@ -350,6 +366,39 @@ export class ThreeCatRenderer implements CatRenderer {
     c.maxDistance = dist * 2.2;
     c.update();
     this.controls = c;
+  }
+
+  /** A soft "contact shadow" under the cat — a radial-gradient blob on a ground
+   *  plane (no shadow map: cheap, swiftshader-safe, and reads like model-viewer's
+   *  shadow-intensity contact shadow rather than a hard cast shadow). */
+  private addContactShadow(obj: THREE.Object3D): void {
+    const box = new THREE.Box3().setFromObject(obj);
+    if (box.isEmpty()) return;
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 128;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    const g = ctx.createRadialGradient(64, 64, 2, 64, 64, 62);
+    g.addColorStop(0, "rgba(0,0,0,0.40)");
+    g.addColorStop(0.55, "rgba(0,0,0,0.16)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const w = Math.max(size.x, size.z) * 1.7;
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, w),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false })
+    );
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.set(centre.x, box.min.y + 0.002, centre.z); // just above the feet
+    this.scene.add(plane);
+    this.contactShadow = plane;
   }
 
   private aspect(): number {
@@ -396,6 +445,14 @@ export class ThreeCatRenderer implements CatRenderer {
     if (this.pivot) {
       this.scene.remove(this.pivot); // root lives under the pivot, not the scene
       this.pivot = null;
+    }
+    if (this.contactShadow) {
+      this.scene.remove(this.contactShadow);
+      this.contactShadow.geometry.dispose();
+      const m = this.contactShadow.material as THREE.MeshBasicMaterial;
+      m.map?.dispose();
+      m.dispose();
+      this.contactShadow = null;
     }
     (this.scene.environment as THREE.Texture | null)?.dispose();
     this.scene.environment = null;
