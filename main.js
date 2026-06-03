@@ -178,7 +178,10 @@ const spCloseBtn    = $("#spClose");
 const choicesEl     = $("#choices");
 // Reusable "show options / on pick" surface (P3.2) — owns #choices.
 const choices = new Choices(choicesEl);
-if (import.meta.env && import.meta.env.DEV) window.__choices = choices;
+if (import.meta.env && import.meta.env.DEV) {
+  window.__choices = choices;
+  window.__offerChoices = (l) => offerReplyChoices(l); // P3.3 render check (hoisted fn)
+}
 const cfgPanelEl    = $("#cfgPanel");
 const cfgCloseBtn   = $("#cfgClose");
 const spOpenCfgBtn  = $("#spOpenCfg");
@@ -2498,9 +2501,23 @@ function buildChatBody(text) {
 // Send a chat turn. Tries the SSE streaming endpoint first so the bubble
 // fills char-by-char; falls back to the JSON endpoint if the stream
 // fails for any reason (some PWAs / proxies break SSE).
+// Render the LLM's optional reply suggestions (envelope.choices, P3.3) as
+// galgame choice chips above the dialogue box; picking one sends it as the next
+// message, so the conversation can flow as a guided VN exchange.
+function offerReplyChoices(list) {
+  if (!Array.isArray(list) || !list.length) return;
+  const items = list
+    .filter((s) => typeof s === "string" && s.trim())
+    .slice(0, 3)
+    .map((s) => ({ label: s.trim() }));
+  if (!items.length) return;
+  choices.show(items, (item) => sendChat(item.label));
+}
+
 async function sendChat(text) {
   if (!text || !text.trim()) return;
   text = text.trim();
+  choices.hide();                         // clear any stale suggestion chips
   appendMsg("user", text);
   bumpInteract(0.5);
   extractFacts(text);
@@ -2585,6 +2602,7 @@ async function tryStreaming(text) {
   const anim = envelope?.animation;
   if (anim && renderer.hasClip(anim)) userPlay(anim);
   emote(envelope?.emote || "💬");
+  offerReplyChoices(envelope?.choices);    // LLM-offered quick replies (P3.3)
 
   // TTS gets the final reply once — streaming TTS isn't worth the complexity.
   const dwell = bubbleDwellMs(reply);
@@ -2632,6 +2650,7 @@ async function sendChatNonStreaming(text) {
     if (anim && renderer.hasClip(anim)) userPlay(anim);
     emote(data.emote || "💬");
     sayLine(reply);
+    offerReplyChoices(data.choices);       // LLM-offered quick replies (P3.3)
     catState.hold(bubbleDwellMs(reply));
   } catch (e) {
     thinking.remove();
