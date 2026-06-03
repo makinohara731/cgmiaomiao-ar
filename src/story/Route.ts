@@ -109,6 +109,62 @@ export const BEATS: Beat[] = [
       );
     },
   },
+  // ---------- 浪漫线 ----------
+  {
+    // Offered while still on 羁绊 (affection≥60 + the cat knows your name); the
+    // explicit accept is the ONLY way acceptedRomance becomes true.
+    id: "romance.offer",
+    route: "羁绊",
+    gate: (s, l) => l.affection >= 60 && !!l.userName && !s.acceptedRomance,
+    run: ({ hooks, acceptRomance, setFlag }) => {
+      hooks.busy(30000);
+      hooks.flashExpression("love", 2400);
+      hooks.emote("🌸");
+      hooks.sayLine("那个…我们…能不能，不只是朋友呀？（小声）");
+      hooks.choices.show(
+        [
+          { label: "我也喜欢你", accept: true },
+          { label: "我们做好朋友吧", accept: false },
+        ],
+        (item) => {
+          hooks.busy(3000);
+          if (item.accept) {
+            acceptRomance();
+            hooks.flashExpression("love", 2600);
+            hooks.emote("💞");
+            hooks.sayLine("呜哇…我好开心！以后…请多多指教喵～");
+            hooks.addAffection(3);
+          } else {
+            setFlag("declined_once", true);
+            hooks.emote("🌼");
+            hooks.sayLine("嗯…能当你最好的朋友，我也很幸福啦！");
+          }
+        },
+        { timeoutMs: 25000, onTimeout: () => hooks.busy(500) }
+      );
+    },
+  },
+  {
+    id: "romance.confess",
+    route: "浪漫",
+    gate: (s) => s.acceptedRomance,
+    run: ({ hooks, life, unlockEnding }) => {
+      hooks.flashExpression("love", 2600);
+      hooks.emote("💞");
+      hooks.sayLine(`${life.userName || "你"}…能一直待在你身边，我好幸福喵～`);
+      hooks.writeDiary("和 ta 心意相通的那天，我永远不会忘记。", "bond");
+      unlockEnding("romance");
+    },
+  },
+  {
+    id: "romance.everyday",
+    route: "浪漫",
+    gate: (_s, l) => l.affection >= 75,
+    run: ({ hooks }) => {
+      hooks.emote("🌷");
+      hooks.sayLine("今天也想黏在你身边一整天～你在的地方，就是我的家喵。");
+    },
+  },
 ];
 
 export const ENDINGS: Ending[] = [
@@ -121,5 +177,13 @@ export const ENDINGS: Ending[] = [
     icon: "🏅",
     blurb: "你们一起走过了好多日子，喵喵把你认定成了最重要的人——永远的朋友。",
     gate: (_s, l) => l.hasUnlock("photo"),
+  },
+  {
+    id: "romance",
+    label: "两心相依",
+    route: "浪漫",
+    icon: "💞",
+    blurb: "喵喵鼓起勇气说出了心意，而你也接住了它——从此两心相依，再不分开。",
+    gate: (s) => s.acceptedRomance && s.seenBeats.includes("romance.confess"),
   },
 ];

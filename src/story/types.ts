@@ -70,6 +70,8 @@ export interface BeatCtx {
   life: LifeView;
   setFlag(k: string, v?: boolean | number | string): void;
   unlockEnding(id: string): void;
+  /** The hard 浪漫 gate — set ONLY from the explicit 接受 choice. Flips the route. */
+  acceptRomance(): void;
 }
 
 export interface Beat {

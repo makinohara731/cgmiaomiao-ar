@@ -377,6 +377,7 @@ function extractFacts(text) {
       if (k === "self" && !life.userName) {
         life.userName = String(m[1]).slice(0, MEM_VAL_MAX);
         saveLife();
+        story.onNameLearned(life.userName); // P4: the cat now knows your name (浪漫 gate)
       }
     }
   }
@@ -1976,6 +1977,7 @@ if (onboardStart) {
     onboardEl.classList.add("hidden");
     onboardEl.removeEventListener("click", onOnboardTap);
     try { localStorage.setItem(ONBOARD_KEY, "1"); } catch (_) {}
+    story.onOnboardComplete();                   // P4: seed the 日常 route on first run
     ensureAudio();                               // explicit gesture — unlock audio
     const nameField = document.getElementById("catNameInput");
     const hasNameField = nameField && !life.catName;

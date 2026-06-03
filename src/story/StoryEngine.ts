@@ -32,6 +32,9 @@ function freshState(): StoryState {
 export class StoryEngine {
   state: StoryState = freshState();
   private hooks: StoryHooks | null = null;
+  private loaded = false; // guard: a host hook (e.g. dailyRoll→onDailyRoll) can fire
+  // BEFORE load() during init; persisting then would clobber the saved story.v1
+  // with defaults. save() + maybeBeat no-op until load() has hydrated.
 
   /** Inject host fns (mirrors audio/composites.configure). Call before load(). */
   configure(hooks: StoryHooks): void {
@@ -41,6 +44,7 @@ export class StoryEngine {
   /** Load persisted story state (versioned + guarded like loadLife), then sync
    *  the route + already-met endings against the current life view. */
   load(): void {
+    this.loaded = true; // from here on, saves are allowed (and load() persists below)
     try {
       const raw = localStorage.getItem(STORY_KEY);
       if (raw) {
@@ -66,6 +70,7 @@ export class StoryEngine {
   }
 
   save(): void {
+    if (!this.loaded) return; // don't persist defaults before load() has hydrated
     this.state.updatedAt = Date.now();
     try {
       localStorage.setItem(STORY_KEY, JSON.stringify(this.state));
@@ -126,7 +131,7 @@ export class StoryEngine {
   /** Try to play one gated, unseen beat — ONLY from a safe (idle) turn. Returns
    *  true iff a beat actually ran. Called from the throttled proactive path. */
   maybeBeat(_trigger?: string): boolean {
-    if (!this.hooks) return false;
+    if (!this.loaded || !this.hooks) return false;
     if (this.hooks.isBusy() || this.hooks.choices.isOpen()) return false; // re-entrancy guard
     const l = this.hooks.life();
     const beat = BEATS.find((b) => !this.isSeen(b) && b.gate(this.state, l));
@@ -134,11 +139,6 @@ export class StoryEngine {
     this.markSeen(beat); // mark BEFORE run so nothing double-fires
     this.runBeat(beat, l);
     return true;
-  }
-
-  /** The explicit romance accept gate (P4.4). Stubbed here. */
-  offerRomanceChoice(): boolean {
-    return false;
   }
 
   setFlag(k: string, v: boolean | number | string = true): void {
@@ -189,6 +189,11 @@ export class StoryEngine {
       life,
       setFlag: (k, v = true) => this.setFlag(k, v),
       unlockEnding: (id) => this.unlockEnding(id),
+      acceptRomance: () => {
+        this.state.acceptedRomance = true;
+        this.recomputeRoute(); // affection≥60 + userName + accepted → route flips to 浪漫
+        this.save();
+      },
     };
     try {
       beat.run(ctx);
