@@ -82,6 +82,9 @@ const CLIPS = {
   // v5 new clips (authored in animate_v2.py)
   headtilt:{loop:false}, sit:{loop:false}, lickpaw:{loop:false},
   pounce:{loop:false},   playbow:{loop:false},
+  // v6 galgame clips (authored in animate_v2.py)
+  nod:{loop:false}, shy:{loop:false}, ponder:{loop:false},
+  adore:{loop:false}, headpat:{loop:false},
 };
 const isLoopClip = (n) => !!(CLIPS[n] && CLIPS[n].loop);
 
@@ -112,6 +115,12 @@ const VOICE_MAP = [
   { kw: /舔爪|舔手|洗爪|舔舔/,             anim: "lickpaw" },
   { kw: /扑|扑过来|扑上来|猛扑/,           anim: "pounce" },
   { kw: /作揖|趴下|想玩|一起玩|邀请/,      anim: "playbow" },
+  // v6 galgame atomic clips (before the generic single-clip fallbacks)
+  { kw: /点头|嗯嗯|好的|同意|没错/,        anim: "nod" },
+  { kw: /害羞|羞羞|不好意思|脸红了|害臊/,  anim: "shy" },
+  { kw: /思考|认真想|沉思|让我想想/,       anim: "ponder" },
+  { kw: /心动|好心动|小鹿乱撞|么么哒/,     anim: "adore" },
+  { kw: /摸头|摸摸头|拍拍头|乖乖/,         anim: "headpat" },
   { kw: /走|行走|散步|过来/,            anim: "walk" },
   { kw: /跑|奔跑|快点|加速/,            anim: "run" },
   { kw: /打|攻击|揍|出拳|咬/,           anim: "attack" },
@@ -505,6 +514,7 @@ const EMOTE_FOR = {
   happy: "❤️", spin: "✨", jump: "⤴️", wave: "👋",
   walk: "🐾", run: "💨", attack: "💢", hurt: "💧",
   headtilt: "❓", sit: "·ω·", lickpaw: "🧼", pounce: "💢", playbow: "🎈",
+  nod: "✅", shy: "😳", ponder: "🤔", adore: "💗", headpat: "😌",
 };
 
 // ---- Hand-drawn emote icons — a cohesive custom set so the mood cues
@@ -567,6 +577,11 @@ async function playAnim(name) {
   if (name === "attack") playHit();
   if (name === "hurt")   { playHurt(); flashExpression("sad", 1900); }
   if (name === "happy")  { playTrill(); flashExpression("happy", 1900); }
+  // v6 clips pair with the new faces so the action + expression read together
+  if (name === "shy")    flashExpression("blush", 2000);
+  if (name === "ponder") flashExpression("think", 2200);
+  if (name === "adore")  { playTrill(); flashExpression(life.affection >= 60 ? "blush" : "love", 2200); }
+  if (name === "headpat") flashExpression("happy", 1900);
   bus.emit(EVT.AnimPlayed, { name, loop });
 
   clearTimeout(oneShotTimer);
@@ -688,8 +703,10 @@ function runBehavior() {
     ["stretch", 10 * pm.calm], ["nothing", 10],
     // v5 ambient variety — the cat looks busier between moves
     ["headtilt", 14 * pm.calm], ["lickpaw", 12 * pm.calm], ["sit", 8 * pm.calm],
+    // v6 calm galgame idles
+    ["ponder", 9 * pm.calm], ["shy", 6 * pm.calm],
   ];
-  if (life.mood > 0.62 && life.energy > 0.5) pool.push(["happy", 12 * pm.lively], ["spin", 6 * pm.lively], ["playbow", 6 * pm.lively]);
+  if (life.mood > 0.62 && life.energy > 0.5) pool.push(["happy", 12 * pm.lively], ["spin", 6 * pm.lively], ["playbow", 6 * pm.lively], ["adore", 7 * pm.lively]);
   if (life.energy > 0.72)                    pool.push(["jump",  6 * pm.lively], ["pounce", 6 * pm.lively]);
 
   const pick = weightedPick(pool);
@@ -1385,13 +1402,15 @@ function petCat() {
   if (life.petStreak >= 3) {
     // showered with attention → delighted; 10+ streak gets the long purr
     emote(pickFrom(["❤️", "💕", "✨"]));
-    // Adored at a romantic affection level → shy blush; otherwise heart-eyes.
-    if (life.petStreak >= 10) { playPurrLong(); flashExpression(life.affection >= 60 ? "blush" : "love", 2200); }
-    else                       playPurr();
+    if (life.petStreak >= 10) playPurrLong();
+    else                      playPurr();
     sayLine(pickFrom(["呼噜呼噜～最喜欢你了！", "嘿嘿，好舒服喵～", "再多摸一会儿嘛～"]));
     life.mood = clamp01(life.mood + 0.18);
     catState.enter("oneshot", 1900);
-    playAnim("happy");
+    // v6: the cat actually does the being-patted move when you pet it. headpat's
+    // own face is "happy"; at a romantic streak override it with blush / heart-eyes.
+    playAnim("headpat");
+    if (life.petStreak >= 10) flashExpression(life.affection >= 60 ? "blush" : "love", 2400);
   } else if (life.petStreak === 2) {
     emote("👋");
     playMeow();
