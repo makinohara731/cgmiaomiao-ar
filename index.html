@@ -186,7 +186,11 @@
        three backend is selected (?renderer=three). -->
   <canvas id="catCanvas" class="renderer-hidden"></canvas>
 
-  <!-- Animation buttons (bottom) -->
+  <!-- Animation tray handle — opens/closes the action drawer (kept tidy off-screen
+       by default so the cat is the hero, not a 28-button debug strip) -->
+  <button id="animToggle" aria-label="动作"><span>动作</span></button>
+
+  <!-- Animation buttons (bottom, in a drawer) -->
   <div id="animBar" class="anim-bar">
     <button class="anim-btn active" data-anim="idle"  title="待机">😺<span>待机</span></button>
     <button class="anim-btn"        data-anim="walk"  title="走">🚶<span>走路</span></button>
@@ -274,31 +278,31 @@
 <div id="statusPanel" class="status-panel hidden">
   <div class="sp-card">
     <button id="spClose" class="sp-close" aria-label="关闭">✕</button>
-    <div class="sp-title">😺 <span id="spName">喵喵</span> · 状态</div>
+    <div class="sp-title"><span id="spName">喵喵</span><span class="sp-crest">·</span>状态</div>
     <div class="sp-stage-row"><span id="spStage" class="sp-stage">初遇</span></div>
     <div class="sp-meter">
-      <span class="sp-label">💛 好感</span>
+      <span class="sp-label"><svg viewBox="0 0 24 24" width="14" height="14" fill="#ff96b3"><path d="M12 21C5 16 2 12.5 2 8.8 2 5.6 4.5 3 7.7 3c1.9 0 3.6 1 4.3 2.6C12.7 4 14.4 3 16.3 3 19.5 3 22 5.6 22 8.8 22 12.5 19 16 12 21Z"/></svg>好感</span>
       <div class="sp-track"><div id="spAff" class="sp-fill sp-fill-aff"></div></div>
     </div>
     <div id="spAffNum" class="sp-affnum">好感度 0 / 100</div>
     <div class="sp-meter">
-      <span class="sp-label">🍖 饱食</span>
+      <span class="sp-label"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#9bf0a0" stroke-width="2"><path d="M3 11h18M5 11a7 7 0 0 0 14 0M9 4c0 1.5-1 2-1 3.5M13 4c0 1.5-1 2-1 3.5"/></svg>饱食</span>
       <div class="sp-track"><div id="spHunger" class="sp-fill"></div></div>
     </div>
     <div class="sp-meter">
-      <span class="sp-label">⚡ 精力</span>
+      <span class="sp-label"><svg viewBox="0 0 24 24" width="14" height="14" fill="#f0c65f"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/></svg>精力</span>
       <div class="sp-track"><div id="spEnergy" class="sp-fill"></div></div>
     </div>
     <div class="sp-meter">
-      <span class="sp-label">😸 心情</span>
+      <span class="sp-label"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#9bf0a0" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01" stroke-linecap="round"/></svg>心情</span>
       <div class="sp-track"><div id="spMood" class="sp-fill"></div></div>
     </div>
     <div id="spDays" class="sp-days">和喵喵相伴第 1 天</div>
     <div id="spTheme" class="sp-theme"></div>
     <div class="sp-link-row">
-      <button id="spOpenDiary" class="sp-cfg-link">📖 日记</button>
-      <button id="spOpenGallery" class="sp-cfg-link">🏛 回廊</button>
-      <button id="spOpenCfg" class="sp-cfg-link">⚙ 设置</button>
+      <button id="spOpenDiary" class="sp-cfg-link">日记</button>
+      <button id="spOpenGallery" class="sp-cfg-link">回廊</button>
+      <button id="spOpenCfg" class="sp-cfg-link">设置</button>
     </div>
   </div>
 </div>
@@ -307,7 +311,7 @@
 <div id="diaryPanel" class="status-panel hidden">
   <div class="sp-card">
     <button id="diaryClose" class="sp-close" aria-label="关闭">✕</button>
-    <div class="sp-title">📖 喵喵的日记</div>
+    <div class="sp-title">喵喵的日记</div>
     <div id="diaryList" class="diary-list"></div>
     <div class="cfg-hint">喵喵会把和你之间的小事偷偷写下来。</div>
   </div>
@@ -317,7 +321,7 @@
 <div id="galleryPanel" class="status-panel hidden">
   <div class="sp-card">
     <button id="galleryClose" class="sp-close" aria-label="关闭">✕</button>
-    <div class="sp-title">🏛 回廊 · 结局与存档</div>
+    <div class="sp-title">回廊<span class="sp-crest">·</span>结局与存档</div>
     <div class="gallery-sub">结局收藏</div>
     <div id="galleryEndings" class="diary-list"></div>
     <div class="gallery-sub">存档（3 位）</div>
@@ -330,7 +334,7 @@
 <div id="cfgPanel" class="status-panel hidden">
   <div class="sp-card">
     <button id="cfgClose" class="sp-close" aria-label="关闭">✕</button>
-    <div class="sp-title">⚙ 喵喵设置</div>
+    <div class="sp-title">喵喵设置</div>
     <div class="cfg-row">
       <div class="cfg-label">性格</div>
       <div class="cfg-personality">

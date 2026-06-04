@@ -5,20 +5,30 @@
 .vn-box {
   position: fixed;
   left: 50%;
-  bottom: 84px; /* clear of the anim bar (bottom:16px, ~64px tall) */
+  bottom: 84px; /* clear of the tray handle (bottom:16px) */
   transform: translate(-50%, 14px);
   width: min(92vw, 720px);
-  padding: 16px 22px 15px;
-  background: linear-gradient(180deg, rgba(28, 35, 48, 0.93), rgba(18, 24, 34, 0.95));
-  color: #f2f6fb;
-  border: 1.5px solid rgba(150, 200, 255, 0.22);
+  padding: 17px 24px 16px;
+  background: linear-gradient(165deg, rgba(20, 33, 28, 0.93), rgba(11, 19, 17, 0.96));
+  color: #eef3e9;
+  border: 1px solid rgba(150, 230, 184, 0.22);
   border-radius: 18px;
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
-  backdrop-filter: blur(8px);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
   opacity: 0;
   pointer-events: none;
   z-index: 14; /* above anim-bar (10), below choices (18) */
   transition: opacity 0.26s ease, transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* engraved corner mark — a tiny galgame textbox flourish (no emoji) */
+.vn-box::after {
+  content: "";
+  position: absolute; right: 16px; top: 14px;
+  width: 14px; height: 14px;
+  border-top: 1px solid rgba(150, 230, 184, 0.4);
+  border-right: 1px solid rgba(150, 230, 184, 0.4);
+  border-top-right-radius: 4px;
+  opacity: 0.6;
 }
 .vn-box.show {
   opacity: 1;
@@ -29,14 +39,14 @@
   position: absolute;
   top: -14px;
   left: 18px;
-  padding: 3px 15px;
+  padding: 4px 16px;
   border-radius: 11px;
-  background: linear-gradient(135deg, #ff9bbf, #ff7fa3);
+  background: linear-gradient(135deg, #ffa6c1, #e26d90);
   color: #fff;
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.5px;
-  box-shadow: 0 3px 12px rgba(255, 127, 163, 0.4);
+  letter-spacing: 1px;
+  box-shadow: 0 4px 14px rgba(226, 109, 144, 0.45);
 }
 .vn-body {
   font-size: 16px;
@@ -57,7 +67,7 @@
   right: 16px;
   bottom: 8px;
   font-size: 12px;
-  color: #9fd0ff;
+  color: #7ee08a;
   opacity: 0;
   pointer-events: none;
   animation: vn-bob 1.15s ease-in-out infinite;

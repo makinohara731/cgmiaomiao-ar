@@ -602,6 +602,12 @@ ANIM_BTNS.forEach((btn) => {
   });
 });
 
+// Action tray drawer — keep the 28 action buttons tucked away by default (the
+// cat is the hero, not a debug strip); the handle slides them in/out.
+$("#animToggle")?.addEventListener("click", () => {
+  document.body.classList.toggle("anim-open");
+});
+
 // =====================================================================
 // Interaction → mood
 // =====================================================================
