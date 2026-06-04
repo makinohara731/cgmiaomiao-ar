@@ -121,7 +121,7 @@ export const BEATS: Beat[] = [
     gate: (s, l) => l.affection >= 60 && !!l.userName && !s.acceptedRomance,
     run: ({ hooks, acceptRomance, setFlag, markSeen }) => {
       hooks.busy(30000);
-      hooks.flashExpression("love", 2400);
+      hooks.flashExpression("blush", 2400);   // P5: a real shy-blush face for the confession
       hooks.emote("🌸");
       hooks.sayLine("那个…我们…能不能，不只是朋友呀？（小声）");
       hooks.choices.show(

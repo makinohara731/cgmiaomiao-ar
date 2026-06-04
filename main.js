@@ -1385,7 +1385,8 @@ function petCat() {
   if (life.petStreak >= 3) {
     // showered with attention → delighted; 10+ streak gets the long purr
     emote(pickFrom(["❤️", "💕", "✨"]));
-    if (life.petStreak >= 10) { playPurrLong(); flashExpression("love", 2200); }
+    // Adored at a romantic affection level → shy blush; otherwise heart-eyes.
+    if (life.petStreak >= 10) { playPurrLong(); flashExpression(life.affection >= 60 ? "blush" : "love", 2200); }
     else                       playPurr();
     sayLine(pickFrom(["呼噜呼噜～最喜欢你了！", "嘿嘿，好舒服喵～", "再多摸一会儿嘛～"]));
     life.mood = clamp01(life.mood + 0.18);
@@ -1617,6 +1618,8 @@ const FACE_VARIANTS = {
   surprise: "textures/face_surprise.webp",
   love:     "textures/face_love.webp",
   cry:      "textures/face_cry.webp",
+  blush:    "textures/face_blush.webp",   // P5: shy pink cheeks (romance / 害羞)
+  think:    "textures/face_think.webp",   // P5: eyes glancing up (思考 / chat-thinking)
 };
 
 async function initBlink() {
@@ -1642,6 +1645,8 @@ function setExpression(name) {
   else if (name === "surprise" && !renderer.hasFace("surprise")) resolved = "open";
   else if (name === "love"     && !renderer.hasFace("love"))     resolved = renderer.hasFace("happy") ? "happy" : "open";
   else if (name === "cry"      && !renderer.hasFace("cry"))      resolved = renderer.hasFace("sad") ? "sad" : "open";
+  else if (name === "blush"    && !renderer.hasFace("blush"))    resolved = renderer.hasFace("love") ? "love" : "open";
+  else if (name === "think"    && !renderer.hasFace("think"))    resolved = "blink";
   renderer.setFace(resolved);
   currentExpression = name;     // track the REQUESTED name (doBlink only blinks from "open")
 }
@@ -1657,6 +1662,22 @@ function flashExpression(name, ms = 1800) {
   expressionResetTimer = setTimeout(() => {
     if (!life.asleep) setExpression("open");
   }, ms);
+}
+
+// Reply → face. So chat / story replies aren't delivered with a frozen neutral
+// head: the expression follows the mood (and any affectionate emoji) of what the
+// cat just said (P3 dialogue-expression polish). The emote glyph wins when it's
+// clearly loving / startled; otherwise the up/down mood drives happy / sad.
+function flashReplyFace(mood, emoteGlyph) {
+  if (life.asleep) return;
+  const g = emoteGlyph || "";
+  if (/[❤️💕💗💖😍🥰😻]/.test(g)) { flashExpression("love", 2200); return; }
+  if (/[😳☺️😊🌸]/.test(g))       { flashExpression("blush", 2200); return; }   // shy
+  if (/[😮😲😯🙀😱]/.test(g))     { flashExpression("surprise", 1600); return; }
+  if (/[😢😭🥺😔]/.test(g))       { flashExpression("sad", 2000); return; }
+  if (mood === "up")   flashExpression("happy", 2000);
+  else if (mood === "down") flashExpression("sad", 2000);
+  else setExpression("open");   // neutral reply: clear the lingering "think" face
 }
 
 function scheduleBlink() {
@@ -2738,6 +2759,7 @@ async function sendChat(text) {
 async function tryStreaming(text) {
   const thinking = appendMsg("cat", "喵喵在想…", "thinking");
   emote("💭");
+  if (!life.asleep) setExpression("think");   // P5: ponder face while it thinks
   // Open the VN dialogue box for streaming; the network paces the typewriter.
   const stream = dialogue.beginStream();
 
@@ -2770,6 +2792,7 @@ async function tryStreaming(text) {
   thinking.remove();
   if (failed && !reply) {
     dialogue.hide();
+    if (!life.asleep) setExpression("open");  // clear the ponder face before the fallback
     catState.hold(400);                    // release the loop for the fallback path
     return false;
   }
@@ -2784,6 +2807,9 @@ async function tryStreaming(text) {
   if (mood === "down") life.mood = clamp01(life.mood - 0.12);
 
   const anim = envelope?.animation;
+  // Face the mood BEFORE the clip: a face-driving clip (hurt→sad / happy→happy)
+  // then takes precedence over this generic reply face.
+  flashReplyFace(mood, envelope?.emote);
   if (anim && renderer.hasClip(anim)) userPlay(anim);
   emote(envelope?.emote || "💬");
   offerReplyChoices(envelope?.choices);    // LLM-offered quick replies (P3.3)
@@ -2802,6 +2828,7 @@ async function tryStreaming(text) {
 async function sendChatNonStreaming(text) {
   const thinking = appendMsg("cat", "喵喵在想…", "thinking");
   emote("💭");
+  if (!life.asleep) setExpression("think");   // P5: ponder face while it thinks
   try {
     const r = await fetch(CHAT_ENDPOINT, {
       method: "POST",
@@ -2830,6 +2857,7 @@ async function sendChatNonStreaming(text) {
     if (life.asleep) wakeUp(false);
     if (data.mood === "up")   life.mood = clamp01(life.mood + 0.15);
     if (data.mood === "down") life.mood = clamp01(life.mood - 0.12);
+    flashReplyFace(data.mood, data.emote);
     const anim = data.animation;
     if (anim && renderer.hasClip(anim)) userPlay(anim);
     emote(data.emote || "💬");

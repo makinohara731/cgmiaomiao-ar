@@ -5,20 +5,18 @@
 //   * Everything else (icons, fonts, textures):     cache-first (immutable-ish).
 //   * SSE endpoints (chat-stream):                  bypassed entirely;
 //     a SW that buffers an event-stream would break streaming.
-const CACHE_NAME = "miaomiao-v9";
+const CACHE_NAME = "miaomiao-v10";
+// Precache only STABLE-path assets. Since the Vite migration the JS/CSS ship as
+// hashed `assets/*.js|css` chunks (the old `./src/*.js` + `./style.css` here all
+// 404'd → the cache stayed empty). Those hashed bundles are now picked up by the
+// runtime network-first strategy below on the first online load, so offline still
+// works after one visit — without a build-time precache manifest (vite-plugin-pwa).
 const ASSETS = [
   "./",
   "./index.html",
-  "./style.css",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
-  "./src/bus.js",
-  "./src/audio.js",
-  "./src/chat-stream.js",
-  "./src/particles.js",
-  "./src/composites.js",
-  "./src/hints.js",
 ];
 
 self.addEventListener("install", (e) => {
