@@ -29,7 +29,7 @@ const errs = [];
 page.on("pageerror", (e) => errs.push(e.message));
 
 await page.goto(URL, { waitUntil: "domcontentloaded" });
-if (SCENE !== "onboard") {
+if (!SCENE.startsWith("onboard")) {
   await page.evaluate(() => {
     localStorage.setItem("miaomiao.onboarded.v1", "1");
     localStorage.setItem(
@@ -50,7 +50,9 @@ await new Promise((r) => setTimeout(r, 5500));
 
 const click = async (sel) => { await page.evaluate((s) => document.querySelector(s)?.click(), sel); await new Promise((r) => setTimeout(r, 600)); };
 
-if (SCENE === "tray") await click("#animToggle");
+if (SCENE === "onboard3") { await click("#onboard"); await click("#onboard"); }
+else if (SCENE === "onboard4") { await click("#onboard"); await click("#onboard"); await click("#onboard"); }
+else if (SCENE === "tray") await click("#animToggle");
 else if (SCENE === "status") await click("#bondChip");
 else if (SCENE === "diary") { await click("#bondChip"); await click("#spOpenDiary"); }
 else if (SCENE === "gallery") { await click("#bondChip"); await click("#spOpenGallery"); }

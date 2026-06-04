@@ -148,9 +148,15 @@ body.cam-mode::after, body.ar-mode::after { display: none; }
 .beat-cat {
   font-size: 92px; line-height: 1;
   animation: beat-bob 2.6s ease-in-out infinite;
-  filter: drop-shadow(0 10px 34px rgba(126, 224, 138, 0.30));
+  filter: drop-shadow(0 12px 40px rgba(126, 224, 138, 0.45));
 }
 @keyframes beat-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+/* spirit-orb hero: a slow breathing glow + twinkling sparkles */
+.spirit { display: block; animation: spirit-breathe 3.4s ease-in-out infinite; }
+@keyframes spirit-breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+.sp-spark { animation: sp-twinkle 2.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.sp-spark:nth-child(odd) { animation-delay: 0.9s; }
+@keyframes sp-twinkle { 0%,100% { opacity: 0.25; } 50% { opacity: 1; } }
 .beat-line {
   color: #eaf2ea; font-size: 21px; line-height: 1.85; letter-spacing: 1px;
   font-weight: 500; max-width: 340px;
