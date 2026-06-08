@@ -26,10 +26,12 @@ const FALLBACK_DUR = 1.2; // s — when a clip duration is unknown
 // away from the clip's first (≈rest) pose at load so the runtime cat actually
 // moves. Conservative factors to avoid mesh intersection; re-tune via the probe.
 const AMPLIFY: Record<string, number> = {
-  // attack + adore/ponder/headpat/shy were re-authored with real body motion in
-  // animate_v2.py (v7), so they're NOT amplified here. These remaining clips keep
-  // a runtime boost (their Blender motion is fine but reads small on screen).
-  nod: 1.9, playbow: 1.7, lickpaw: 1.7, pounce: 1.6, headtilt: 1.6,
+  // Most clips were re-authored bolder in Blender (v7 + the batch-1/2 arm-unlock),
+  // so they're NOT amplified — a runtime gain on top would DOUBLE-boost them
+  // (e.g. lickpaw/pounce/playbow: the arm would extrapolate past the +90° wrap
+  // point, the crouch/bow would over-shoot). Only nod/headtilt stay deliberately
+  // small in Blender and keep a runtime nudge.
+  nod: 1.9, headtilt: 1.6,
 };
 
 export interface CatModelOpts {
