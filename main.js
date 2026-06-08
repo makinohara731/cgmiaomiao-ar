@@ -29,6 +29,7 @@ import { DialogueBox } from "./src/vn/DialogueBox";
 import { Choices } from "./src/vn/Choices";
 import { story } from "./src/story/StoryEngine";
 import * as saves from "./src/story/saves";
+import { ICON, mountIcons } from "./src/ui/icons";
 // Re-export the audio API so the rest of main.js can keep calling
 // playMeow() / startBGM() etc. without prefixing every call. Same with
 // the bus's emit so feature code stays terse.
@@ -38,6 +39,10 @@ const {
   playSparkle, playEat, playPurrLong, playTrill,
   startBGM, stopBGM, duckBGM, bgmRunning, bgmTheme,
 } = audio;
+
+// Inject the custom line-icons into every [data-icon] (replaces all emoji in the
+// markup). The module is deferred, so the DOM is fully parsed by here.
+mountIcons();
 
 // =====================================================================
 // Config
@@ -548,6 +553,11 @@ const EMOTE_ART = {
   "🌞": _ART.sun,
   "❗": _ART.exclaim,
   "👋": _ART.paw, "🐾": _ART.paw,
+  // extra coverage so no raw emoji ever leaks into the bubble (mono line-icons)
+  "🎵": _ART.note, "💥": _ART.dizzy, "👀": ICON.eye, "👁": ICON.eye,
+  "🌀": ICON.swirl, "☀️": _ART.sun, "💚": _ART.heart, "✋": ICON.hand,
+  "✅": ICON.check, "😳": ICON.blush, "🤔": _ART.think, "😌": ICON.smile,
+  "💀": ICON.zzz, "🌟": ICON.star,
 };
 
 // =====================================================================
@@ -1856,7 +1866,7 @@ function sayLine(text) {
 // =====================================================================
 muteBtn.addEventListener("click", () => {
   isMuted = !isMuted;
-  muteBtn.textContent = isMuted ? "🔇" : "🔊";
+  muteBtn.innerHTML = isMuted ? ICON.mute : ICON.sound;
   muteBtn.classList.toggle("muted", isMuted);
   if (isMuted && window.speechSynthesis) window.speechSynthesis.cancel();
   if (isMuted && cloudAudio) { try { cloudAudio.pause(); } catch (_) {} cloudAudio = null; }
@@ -2225,7 +2235,7 @@ async function enterCamMode() {
   try { await camFeed.play(); } catch (_) {}
   camMode = true;
   document.body.classList.add("cam-mode");
-  camBtn.textContent = "✕";
+  camBtn.innerHTML = ICON.close;
   camBtn.classList.add("active");
   modelViewer.setAttribute("shadow-intensity", "0");   // a floating spirit — skip the fake ground shadow
   bumpInteract();
@@ -2238,7 +2248,7 @@ function exitCamMode() {
   camMode = false;
   document.body.classList.remove("cam-mode", "cam-front");
   camFacing = "environment";
-  if (camBtn) { camBtn.textContent = "📸"; camBtn.classList.remove("active"); }
+  if (camBtn) { camBtn.innerHTML = ICON.cam; camBtn.classList.remove("active"); }
   modelViewer.setAttribute("shadow-intensity", "0.55");
   if (visionRAF) { cancelAnimationFrame(visionRAF); visionRAF = null; }
   lastGestureName = "";
@@ -2371,7 +2381,7 @@ function exitArMode() {
     if (v) v.classList.remove("ar-feed");
   }
   hideArHint();
-  if (camBtn) { camBtn.textContent = "📸"; camBtn.classList.remove("active"); }
+  if (camBtn) { camBtn.innerHTML = ICON.cam; camBtn.classList.remove("active"); }
 }
 
 if (camBtn && camFeed) {
@@ -2955,7 +2965,7 @@ bus.on(EVT.AnimPlayed, () => {
   if (animPlaysSeen === 2) {
     hints.showHint(
       "composites",
-      "动画栏往右滑还有跳舞 💃 看星星 🌟 哦",
+      "动画栏往右滑，还有跳舞、看星星这些哦",
       { anchor: "bottom", ttlMs: 9000 }
     );
   }

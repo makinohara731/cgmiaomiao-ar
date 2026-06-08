@@ -6,6 +6,14 @@
    Every class/id/state-class the markup + main.js drive is preserved.
    ========================================================================== */
 
+/* Webfonts (jsDelivr, unicode-range split → only the used glyphs download;
+   graceful fallback to the system stack if the CDN is blocked). LXGW WenKai =
+   warm handwritten CJK for titles; Nunito = rounded friendly Latin/numerals.
+   @import must precede all rules. */
+@import url("https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css");
+@import url("https://cdn.jsdelivr.net/npm/@fontsource/nunito@5.0.0/400.css");
+@import url("https://cdn.jsdelivr.net/npm/@fontsource/nunito@5.0.0/700.css");
+
 /* === Design tokens === */
 :root {
   /* surfaces */
@@ -15,6 +23,8 @@
   --panel-2:    rgba(13, 23, 20, 0.94);
   --edge:       rgba(150, 230, 184, 0.20);  /* luminous hairline */
   --edge-soft:  rgba(150, 230, 184, 0.10);
+  /* one glass-surface token reskins every panel/chip/bar (light vs dark) */
+  --surface:    linear-gradient(165deg, rgba(20,33,28,0.90), rgba(12,21,18,0.94));
 
   /* ink on dark */
   --cream:      #eef3e9;   /* primary warm off-white */
@@ -38,9 +48,11 @@
   --grass: #15302a; --ground: #0e211c;
   --stage: rgba(126, 224, 138, 0.16);   /* halo glow behind the cat */
 
-  /* type */
-  --font:    -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
-  --font-num: "Avenir Next", "Helvetica Neue", "PingFang SC", sans-serif;
+  /* type — Nunito (Latin/digits) + WenKai (handwritten display titles), with a
+     system CJK fallback so a blocked CDN degrades gracefully */
+  --font:    "Nunito", -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-display: "LXGW WenKai", "Nunito", "PingFang SC", "Microsoft YaHei", serif;
+  --font-num: "Nunito", "Avenir Next", "PingFang SC", sans-serif;
 
   /* depth */
   --shadow:    0 24px 70px rgba(0, 0, 0, 0.55);
@@ -48,8 +60,34 @@
   --inset-hi:  inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
-/* time-of-day hue shifts — all kept deep/cinematic (bright noon pastel was the
-   "too-AI" tell). */
+/* Daytime = a FRESH, natural, comfortable LIGHT scheme (the "清新自然" ask): warm
+   bone surfaces, soft sage greens, dark-on-light ink. The app already emits
+   body.time-day by the clock; dawn/dusk/night keep the cozy dark theme below.
+   Token-only override — no markup/JS change (applyTimeOfDay already sets it). */
+body.time-day {
+  --ink: #eef2e6; --ink-2: #e6ecdb;
+  --panel: rgba(255,253,246,0.90); --panel-2: rgba(243,247,235,0.94);
+  --edge: rgba(110,150,112,0.30); --edge-soft: rgba(110,150,112,0.15);
+  --surface: linear-gradient(168deg, rgba(255,253,246,0.93), rgba(240,246,234,0.96));
+
+  --cream: #33413a; --cream-dim: #55645a; --muted: #84927f; --faint: #a6b2a3;
+
+  --green: #5aa775; --green-deep: #3f9560; --green-glow: rgba(90,167,117,0.24);
+  --gold: #cf9a3e; --rose: #e58aa0; --rose-deep: #cf6f8c; --rose-glow: rgba(229,138,160,0.30);
+
+  --sky-top: #ecf4e6; --sky-mid: #e0efdf; --sky-bot: #d4e7d6;
+  --hill-back: #c0ddba; --hill-front: #9fcd99;
+  --tree-trunk: #b89a78; --tree-leaf-light: #8ac888; --tree-leaf-dark: #61ae60;
+  --grass: #82c17e; --ground: #e8dfcb; --stage: rgba(90,167,117,0.18);
+
+  --shadow: 0 18px 46px rgba(70,95,72,0.16); --shadow-sm: 0 6px 18px rgba(70,95,72,0.12);
+  --inset-hi: inset 0 1px 0 rgba(255,255,255,0.65);
+}
+/* the corner film-grain reads heavy on bone — lighten it for day */
+body.time-day::after { opacity: 0.16; }
+
+/* time-of-day hue shifts for the dark themes — kept deep/cinematic for a cozy
+   evening read (bright noon pastel was the "too-AI" tell; day is handled above). */
 body.time-dawn {
   --sky-top: #3a2b3a; --sky-mid: #5a3b44; --sky-bot: #6e4a44;
   --hill-back: #2e2730; --hill-front: #1c1a22;
@@ -187,7 +225,7 @@ body.cam-mode::after, body.ar-mode::after { display: none; }
 /* Naming card — the first "menu", sets the galglass language. */
 .onboard-card {
   max-width: 380px; width: 88%;
-  background: linear-gradient(165deg, var(--panel), var(--panel-2));
+  background: var(--surface);
   border: 1px solid var(--edge);
   border-radius: 22px; padding: 38px 30px 30px;
   box-shadow: var(--shadow), var(--inset-hi);
@@ -239,7 +277,7 @@ body.is-offline .bond-chip::before {
 .hint-chip {
   position: absolute; left: 50%; transform: translate(-50%, -8px) scale(0.95);
   padding: 9px 15px 9px 17px; display: inline-flex; gap: 10px; align-items: center;
-  background: linear-gradient(165deg, var(--panel), var(--panel-2));
+  background: var(--surface);
   border: 1px solid var(--edge); color: var(--cream);
   font-size: 13px; line-height: 1.4; letter-spacing: 0.3px;
   border-radius: 999px; box-shadow: var(--shadow-sm);
@@ -329,7 +367,7 @@ body.ar-mode .env-layer { display: none; }
 }
 #arHint.show { opacity: 1; }
 .ar-hint-card {
-  background: linear-gradient(165deg, var(--panel), var(--panel-2));
+  background: var(--surface);
   border: 1px solid var(--edge);
   border-radius: 16px; padding: 12px 12px 9px; text-align: center;
   color: var(--cream); font-size: 12px; line-height: 1.6;
@@ -377,7 +415,7 @@ body.time-dusk #envSun { opacity: 0.5; filter: drop-shadow(0 0 16px rgba(255,130
   display: flex; gap: 4px; padding: 9px 12px;
   max-width: calc(100vw - 28px);
   overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none;
-  background: linear-gradient(165deg, rgba(20,33,28,0.86), rgba(12,21,18,0.92));
+  background: var(--surface);
   border: 1px solid var(--edge-soft);
   border-radius: 18px; box-shadow: var(--shadow-sm), var(--inset-hi);
   backdrop-filter: blur(18px);
@@ -413,7 +451,7 @@ body:not(.anim-open) .anim-bar {
   display: flex; align-items: center; gap: 8px;
   padding: 9px 20px; z-index: 11;
   font-size: 12px; font-weight: 600; letter-spacing: 3px; color: var(--cream-dim);
-  background: linear-gradient(165deg, rgba(20,33,28,0.86), rgba(12,21,18,0.92));
+  background: var(--surface);
   border: 1px solid var(--edge-soft); border-radius: 999px;
   box-shadow: var(--shadow-sm); backdrop-filter: blur(18px);
   transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease;
@@ -435,7 +473,7 @@ body.anim-open #animToggle::after { transform: rotate(180deg); }
 .round-btn {
   width: 50px; height: 50px; font-size: 22px; line-height: 1;
   border: 1px solid var(--edge-soft); border-radius: 50%;
-  background: linear-gradient(165deg, rgba(20,33,28,0.86), rgba(12,21,18,0.92));
+  background: var(--surface);
   box-shadow: var(--shadow-sm), var(--inset-hi); backdrop-filter: blur(16px);
   display: flex; align-items: center; justify-content: center;
   transition: transform 0.1s, background 0.15s, border-color 0.15s;
@@ -449,7 +487,7 @@ body.anim-open #animToggle::after { transform: rotate(180deg); }
 .status {
   position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
   padding: 8px 17px; font-size: 13px; letter-spacing: 0.5px;
-  background: linear-gradient(165deg, rgba(12,21,18,0.92), rgba(8,14,12,0.94));
+  background: var(--surface);
   border: 1px solid var(--edge-soft); color: var(--cream);
   border-radius: 999px; box-shadow: var(--shadow-sm);
   opacity: 0; transition: opacity 0.25s; pointer-events: none; z-index: 20;
@@ -489,7 +527,7 @@ body.anim-open #animToggle::after { transform: rotate(180deg); }
 .chat-panel {
   position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
   width: min(560px, 100%); max-height: 72vh;
-  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  background: var(--surface);
   border: 1px solid var(--edge); border-bottom: none;
   border-top-left-radius: 24px; border-top-right-radius: 24px;
   box-shadow: 0 -16px 50px rgba(0,0,0,0.5);
@@ -543,7 +581,7 @@ body.anim-open #animToggle::after { transform: rotate(180deg); }
 .qr-modal.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 .qr-card {
   position: relative; width: 86%; max-width: 340px;
-  background: linear-gradient(165deg, var(--panel), var(--panel-2));
+  background: var(--surface);
   border: 1px solid var(--edge); border-radius: 22px; padding: 32px 28px 24px;
   text-align: center; box-shadow: var(--shadow), var(--inset-hi);
 }
@@ -557,7 +595,7 @@ body.anim-open #animToggle::after { transform: rotate(180deg); }
 .bond-chip {
   position: fixed; top: 16px; left: 16px;
   display: flex; align-items: center; gap: 6px; padding: 7px 14px 10px;
-  background: linear-gradient(165deg, rgba(20,33,28,0.86), rgba(12,21,18,0.92));
+  background: var(--surface);
   border: 1px solid var(--edge-soft); backdrop-filter: blur(14px);
   border-radius: 14px; box-shadow: var(--shadow-sm);
   font-size: 13px; font-weight: 600; color: var(--cream); letter-spacing: 0.5px;
@@ -577,7 +615,7 @@ body.anim-open #animToggle::after { transform: rotate(180deg); }
 .choices.hidden { display: none; }
 .choice-btn {
   padding: 13px 18px; font-size: 15px; font-weight: 600; color: var(--cream); text-align: left;
-  background: linear-gradient(165deg, var(--panel), var(--panel-2));
+  background: var(--surface);
   border: 1px solid var(--edge); border-radius: 14px; box-shadow: var(--shadow-sm);
   position: relative; transition: transform 0.1s, border-color 0.15s, background 0.15s;
 }
@@ -599,7 +637,7 @@ body.anim-open #animToggle::after { transform: rotate(180deg); }
 .status-panel.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 .sp-card {
   position: relative; width: 88%; max-width: 360px;
-  background: linear-gradient(165deg, var(--panel), var(--panel-2));
+  background: var(--surface);
   border: 1px solid var(--edge); border-radius: 22px; padding: 30px 26px 22px;
   box-shadow: var(--shadow), var(--inset-hi); color: var(--cream);
 }
@@ -687,6 +725,34 @@ body.anim-open #animToggle::after { transform: rotate(180deg); }
   color: var(--cream-dim); font-size: 12.5px; cursor: pointer; transition: color 0.15s, border-color 0.15s;
 }
 .sp-cfg-link:hover, .sp-cfg-link:active { color: var(--green); border-color: var(--green); }
+
+/* === Custom line-icons (replace all emoji; injected by src/ui/icons.js).
+   Sized in em so each host's font-size drives the icon; recolour via currentColor
+   so the existing active states just work. === */
+.ic { display: inline-flex; align-items: center; justify-content: center; line-height: 0; vertical-align: middle; }
+.ic svg { display: block; }
+.anim-btn .ic { font-size: 21px; color: var(--muted); transition: color 0.15s; }
+.anim-btn.active .ic { color: var(--green); }
+.anim-btn.anim-composite .ic { color: var(--gold); }
+.round-btn .ic { font-size: 23px; color: var(--cream); }
+.round-btn.active .ic { color: #fff; }
+.ar-btn .ic, .qr-btn .ic { font-size: 17px; color: inherit; }
+.forever-glow.ic { font-size: 13px; color: var(--gold); }
+.loader-cat .ic { font-size: 76px; }
+
+/* handwritten display font on titles + the storybook narrative */
+.sp-title, .onboard-card h1, .qr-card h2, .beat-line, .sp-stage, .chat-header { font-family: var(--font-display); }
+
+/* daytime fixes — a few components hard-coded fills that assumed a dark base
+   (text colour already follows the --cream token, so only backgrounds need it) */
+body.time-day .onboard-card .name-input input,
+body.time-day .choices .choice-input,
+body.time-day .chat-input input { background: rgba(255,255,255,0.72); }
+body.time-day .chat-msg.cat { background: rgba(255,255,255,0.78); }
+body.time-day .anim-btn:hover { background: rgba(60,80,60,0.06); }
+body.time-day .sp-track { background: rgba(70,95,72,0.12); }
+body.time-day .diary-item, body.time-day .save-slot { background: rgba(90,167,117,0.12); }
+body.time-day .pers-btn, body.time-day .slot-btn, body.time-day .sp-cfg-link { background: rgba(70,95,72,0.05); }
 
 @media (max-height: 600px) {
   .side-bar { top: 42%; }
