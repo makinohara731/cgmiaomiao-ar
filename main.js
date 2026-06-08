@@ -561,7 +561,7 @@ const EMOTE_ART = {
   "🎵": _ART.note, "💥": _ART.dizzy, "👀": ICON.eye, "👁": ICON.eye,
   "🌀": ICON.swirl, "☀️": _ART.sun, "💚": _ART.heart, "✋": ICON.hand,
   "✅": ICON.check, "😳": ICON.blush, "🤔": _ART.think, "😌": ICON.smile,
-  "💀": ICON.zzz, "🌟": ICON.star,
+  "💀": ICON.zzz, "🌟": ICON.star, "💬": ICON.chat, "💾": ICON.note,
 };
 
 // =====================================================================
@@ -1902,7 +1902,7 @@ if (window.speechSynthesis) {
 
 let cloudAudio = null;
 
-async function speak(text) {
+async function speak(text, mood) {
   if (isMuted) return;
   const clean = (text || "")
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, "")
@@ -1910,20 +1910,29 @@ async function speak(text) {
     .trim();
   if (!clean) return;
 
-  // ---- Cloud TTS first (real Qwen-TTS voice). Falls back to the
-  //      browser's SpeechSynthesis if the network or worker hiccups. ----
+  // ---- Cloud TTS first (real Qwen-TTS voice). The worker picks the voice from
+  //      the story route / bond stage; mood tints the playback rate here. Falls
+  //      back to the browser's SpeechSynthesis if the network/worker hiccups. ----
   if (TTS_ENDPOINT && cfg.cloudVoice) {
     try {
       const resp = await fetch(TTS_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: clean }),
+        body: JSON.stringify({
+          text: clean,
+          mood: mood || "",
+          route: (story.route && story.route()) || "",
+          stage: stageOf(life.affection).name,
+        }),
       });
       if (resp.ok) {
         const blob = await resp.blob();
         if (cloudAudio) { try { cloudAudio.pause(); } catch (_) {} }
         const url = URL.createObjectURL(blob);
         cloudAudio = new Audio(url);
+        // free mood tint on a fixed voice: a touch quicker/brighter when happy,
+        // a touch slower/softer when down.
+        cloudAudio.playbackRate = mood === "up" ? 1.06 : mood === "down" ? 0.95 : 1.0;
         cloudAudio.onended = cloudAudio.onerror = () => URL.revokeObjectURL(url);
         await cloudAudio.play();
         return;
@@ -1931,14 +1940,14 @@ async function speak(text) {
     } catch (_) { /* fall through to browser TTS */ }
   }
 
-  // ---- Fallback: browser SpeechSynthesis ----
+  // ---- Fallback: browser SpeechSynthesis (prosody also varies by mood) ----
   if (!window.speechSynthesis) return;
   try {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(clean);
     u.lang = "zh-CN";
-    u.pitch = 1.7;          // small, cute voice
-    u.rate = 1.08;
+    u.pitch = mood === "up" ? 1.85 : mood === "down" ? 1.5 : 1.7;   // small, cute voice
+    u.rate  = mood === "up" ? 1.14 : mood === "down" ? 1.0 : 1.08;
     const zh = ttsVoices.find((v) => /zh|cmn|chinese|中文|普通话/i.test(v.lang + " " + v.name));
     if (zh) u.voice = zh;
     window.speechSynthesis.speak(u);
@@ -1947,12 +1956,12 @@ async function speak(text) {
 
 // The sprite "says" a line: on-screen speech bubble + spoken voice.
 let sayTimer = null;
-function sayLine(text) {
+function sayLine(text, mood) {
   if (!text) return;
   const dwell = bubbleDwellMs(text);                        // time to read
   dialogue.say(text, dwell);                                // VN box: name tab + typewriter
   duckBGM(0.35, dwell);                                     // let the voice cut through
-  speak(text);
+  speak(text, mood);                                        // mood tints voice prosody
 }
 
 // =====================================================================
@@ -3029,7 +3038,7 @@ async function tryStreaming(text) {
   // TTS gets the final reply once — streaming TTS isn't worth the complexity.
   const dwell = bubbleDwellMs(reply);
   duckBGM(0.35, dwell);
-  speak(reply);
+  speak(reply, mood);                      // mood tints the voice prosody / playback rate
   stream.end(dwell);                       // keep the VN box up for the read dwell, then hide
   // Release the loop, leaving a short read-tail so it doesn't barge in
   // while the box is still up.
@@ -3073,7 +3082,7 @@ async function sendChatNonStreaming(text) {
     const anim = data.animation;
     if (anim && renderer.hasClip(anim)) userPlay(anim);
     emote(data.emote || "💬");
-    sayLine(reply);
+    sayLine(reply, data.mood);             // mood tints the voice prosody / playback rate
     offerReplyChoices(data.choices);       // LLM-offered quick replies (P3.3)
     catState.hold(bubbleDwellMs(reply));
   } catch (e) {
