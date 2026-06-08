@@ -55,6 +55,9 @@ export const ICON = Object.freeze({
   mute: S('<path d="M4 9v6h3l5 4V5L7 9Z" fill="currentColor" stroke="none"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>'),
   phone: S('<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>'),
   close: S('<path d="M6 6l12 12M18 6 6 18"/>'),
+  sun: S('<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.1 5.1l1.7 1.7M17.2 17.2l1.7 1.7M18.9 5.1l-1.7 1.7M6.8 17.2l-1.7 1.7"/>'),
+  moon: S('<path d="M20.5 14.5A8.4 8.4 0 1 1 9.2 3.6 6.8 6.8 0 0 0 20.5 14.5Z"/>'),
+  lock: S('<rect x="5" y="11" width="14" height="9" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
 
   // —— brand spirit-orb (loader) — echoes the onboarding hero ——
   spirit: '<svg viewBox="0 0 120 120" width="76" height="76" aria-hidden="true">' +

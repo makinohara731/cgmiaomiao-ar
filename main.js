@@ -207,6 +207,10 @@ const diaryPanelEl    = $("#diaryPanel");
 const diaryListEl     = $("#diaryList");
 const diaryCloseBtn   = $("#diaryClose");
 const spOpenDiaryBtn  = $("#spOpenDiary");
+const memoryPanelEl   = $("#memoryPanel");
+const memoryListEl    = $("#memoryList");
+const memCloseBtn     = $("#memClose");
+const spOpenMemBtn    = $("#spOpenMemory");
 const galleryPanelEl   = $("#galleryPanel");
 const galleryEndingsEl = $("#galleryEndings");
 const gallerySlotsEl   = $("#gallerySlots");
@@ -1231,6 +1235,39 @@ function renderStatusPanel() {
   setTxt("spDays", `和${catNameDisplay()}相伴第 ${days} 天 · 摸过 ${life.totalPets} 次`);
   setTxt("spName", catNameDisplay());
   setTxt("spTheme", daily.theme ? `今日心情 · ${daily.theme}` : "");
+  renderLadder();
+  renderCollection();
+}
+
+// 羁绊之路 — the 5-stage journey: current rung lit, passed rungs filled, future
+// rungs faint with their threshold + a teaser of what they unlock.
+function renderLadder() {
+  const el = document.getElementById("spLadder");
+  if (!el) return;
+  const cur = stageOf(life.affection).name;
+  el.innerHTML = STAGES.map((s) => {
+    const reached = life.affection >= s.min;
+    const isCur = s.name === cur;
+    const unlock = STAGE_UNLOCK[s.name];
+    const right = reached
+      ? (unlock ? `<span class="rung-gift">${unlock.label}</span>` : "")
+      : `<span class="rung-need">好感 ${s.min}</span>`;
+    return `<div class="sp-rung${reached ? " reached" : ""}${isCur ? " current" : ""}">` +
+      `<span class="rung-dot"></span><span class="rung-name">${s.name}</span>${right}</div>`;
+  }).join("");
+}
+
+// 心意收藏 — a persistent grid of the stage unlocks, so earned gifts have a home
+// instead of a one-shot toast that vanishes.
+function renderCollection() {
+  const el = document.getElementById("spCollection");
+  if (!el) return;
+  el.innerHTML = Object.values(STAGE_UNLOCK).map((u) => {
+    const got = hasUnlock(u.key);
+    return `<div class="sp-keep${got ? "" : " locked"}">` +
+      `<span class="keep-icon">${got ? ICON.spark : ICON.lock}</span>` +
+      `<span class="keep-label">${got ? u.label : "？？？"}</span></div>`;
+  }).join("");
 }
 function openStatusPanel() {
   renderStatusPanel();
@@ -1304,7 +1341,7 @@ if (spOpenCfgBtn) spOpenCfgBtn.addEventListener("click", () => {
 });
 
 // ---- Diary panel: render entries newest-first, empty-state friendly ----
-const DIARY_TAG_ICON = { day: "🌤", feed: "🐟", bond: "✨", moment: "💭", dream: "🌙" };
+const DIARY_TAG_ICON = { day: ICON.sun, feed: ICON.fish, bond: ICON.heart, moment: ICON.note, dream: ICON.moon };
 function renderDiary() {
   if (!diaryListEl) return;
   if (!diary.length) {
@@ -1314,10 +1351,10 @@ function renderDiary() {
   // Newest entry first. Same-day entries grouped by date in the meta line.
   const items = [...diary].reverse().slice(0, DIARY_CAP);
   diaryListEl.innerHTML = items.map((d) => {
-    const icon = DIARY_TAG_ICON[d.tag] || "💭";
+    const icon = DIARY_TAG_ICON[d.tag] || ICON.note;
     const safe = String(d.text)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    return `<div class="diary-item"><span class="diary-meta">${icon} ${d.ymd}</span>${safe}</div>`;
+    return `<div class="diary-item"><span class="diary-meta"><span class="diary-ic">${icon}</span>${d.ymd}</span>${safe}</div>`;
   }).join("");
 }
 function openDiaryPanel() {
@@ -1332,6 +1369,41 @@ if (diaryCloseBtn) diaryCloseBtn.addEventListener("click", () => diaryPanelEl?.c
 if (diaryPanelEl) {
   diaryPanelEl.addEventListener("click", (e) => {
     if (e.target === diaryPanelEl) diaryPanelEl.classList.add("hidden");
+  });
+}
+
+// ---- Memory board: what the cat remembers about you, grouped + displayed ----
+function renderMemory() {
+  if (!memoryListEl) return;
+  const by = (k) => mem.facts.filter((f) => f.k === k).map((f) => f.v);
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const groups = [
+    { title: "ta 喜欢",   items: by("likes") },
+    { title: "ta 不喜欢", items: by("dislikes") },
+    { title: "关于你",    items: [...by("self"), ...by("fact")] },
+    { title: "最近聊过",  items: [...mem.topics] },
+  ].filter((g) => g.items.length);
+  if (!groups.length) {
+    memoryListEl.innerHTML = `<div class="diary-empty">喵喵还在慢慢认识你呢～<br>多和它聊聊天吧</div>`;
+    return;
+  }
+  memoryListEl.innerHTML = groups.map((g) =>
+    `<div class="mem-group"><div class="mem-group-title">${g.title}</div>` +
+    `<div class="mem-tags">${g.items.map((v) => `<span class="mem-tag">${esc(v)}</span>`).join("")}</div></div>`
+  ).join("");
+}
+function openMemoryPanel() {
+  renderMemory();
+  if (memoryPanelEl) memoryPanelEl.classList.remove("hidden");
+}
+if (spOpenMemBtn) spOpenMemBtn.addEventListener("click", () => {
+  if (statusPanelEl) statusPanelEl.classList.add("hidden");
+  openMemoryPanel();
+});
+if (memCloseBtn) memCloseBtn.addEventListener("click", () => memoryPanelEl?.classList.add("hidden"));
+if (memoryPanelEl) {
+  memoryPanelEl.addEventListener("click", (e) => {
+    if (e.target === memoryPanelEl) memoryPanelEl.classList.add("hidden");
   });
 }
 
@@ -1350,7 +1422,7 @@ function renderGallery() {
       : list.map(({ ending, unlocked }) => {
           const label = unlocked ? ending.label : "？？？";
           const blurb = unlocked ? ending.blurb : "尚未解锁的结局";
-          return `<div class="diary-item${unlocked ? "" : " locked"}"><span class="diary-meta">${ending.icon} ${label}</span>${blurb}</div>`;
+          return `<div class="diary-item${unlocked ? "" : " locked"}"><span class="diary-meta"><span class="diary-ic">${unlocked ? ICON.star : ICON.lock}</span>${label}</span>${blurb}</div>`;
         }).join("");
   }
   if (gallerySlotsEl) {
@@ -1369,8 +1441,8 @@ function renderGallery() {
 function doSaveSlot(n) {
   saves.saveSlot(n, { affection: life.affection, stage: stageOf(life.affection).name, catName: catNameDisplay(), route: story.route() });
   renderGallery();
-  emote("💾");
-  showStatus(`已保存到存档 ${n + 1} ✨`, 2000);
+  emote("✨");
+  showStatus(`已保存到存档 ${n + 1}`, 2000);
 }
 function doLoadSlot(n) {
   // Restore + rehydrate SYNCHRONOUSLY inside withSuppressed so the periodic

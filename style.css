@@ -753,6 +753,49 @@ body.time-day .anim-btn:hover { background: rgba(60,80,60,0.06); }
 body.time-day .sp-track { background: rgba(70,95,72,0.12); }
 body.time-day .diary-item, body.time-day .save-slot { background: rgba(90,167,117,0.12); }
 body.time-day .pers-btn, body.time-day .slot-btn, body.time-day .sp-cfg-link { background: rgba(70,95,72,0.05); }
+body.time-day .mem-tag, body.time-day .sp-keep,
+body.time-day .diary-book .diary-item { background: rgba(90,167,117,0.10); }
+
+/* === D highlight surfaces: 羁绊之路 / 心意收藏 / 日记本 / 记忆板 === */
+.sp-section { margin: 17px 2px 7px; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--muted); }
+
+/* 羁绊之路 — vertical 5-stage journey */
+.sp-ladder { display: flex; flex-direction: column; }
+.sp-rung { display: flex; align-items: center; gap: 10px; padding: 5px 2px; position: relative; }
+.sp-rung::before { content: ""; position: absolute; left: 7px; top: 0; bottom: 0; width: 2px; background: var(--edge-soft); }
+.sp-rung:first-child::before { top: 50%; }
+.sp-rung:last-child::before { bottom: 50%; }
+.rung-dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; z-index: 1; box-sizing: border-box;
+  background: var(--ink-2); border: 2px solid var(--faint); transition: background 0.3s, box-shadow 0.3s; }
+.sp-rung.reached .rung-dot { background: var(--green); border-color: var(--green); }
+.sp-rung.current .rung-dot { box-shadow: 0 0 0 4px var(--green-glow); }
+.rung-name { font-size: 13px; color: var(--cream-dim); font-weight: 600; }
+.sp-rung.reached .rung-name { color: var(--cream); }
+.sp-rung.current .rung-name { color: var(--green); font-weight: 700; }
+.rung-need { margin-left: auto; font-size: 11px; color: var(--faint); }
+.rung-gift { margin-left: auto; font-size: 11px; color: var(--gold); letter-spacing: 0.3px; }
+
+/* 心意收藏 — persistent grid of stage unlocks */
+.sp-collection { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin: 2px 0; }
+.sp-keep { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 11px 4px; text-align: center;
+  background: rgba(126,224,138,0.06); border: 1px solid var(--edge-soft); border-radius: 13px; }
+.sp-keep.locked { opacity: 0.5; }
+.keep-icon { font-size: 19px; color: var(--gold); display: inline-flex; }
+.sp-keep.locked .keep-icon { color: var(--faint); }
+.keep-label { font-size: 10px; color: var(--cream-dim); line-height: 1.25; }
+
+/* 日记本 — a little bound book (warm paper card + a spine) */
+.diary-book { padding-left: 32px; }
+.diary-book::after { content: ""; position: absolute; left: 13px; top: 56px; bottom: 24px; width: 3px;
+  border-radius: 3px; background: linear-gradient(var(--green), var(--green-deep)); opacity: 0.45; }
+.diary-ic { display: inline-flex; vertical-align: -2px; margin-right: 5px; color: var(--green); }
+
+/* 记忆板 — sticky-note tags grouped by kind */
+.mem-list { margin: 12px -2px 2px; max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; padding: 4px 2px; }
+.mem-group-title { font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 1px; margin-bottom: 8px; }
+.mem-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+.mem-tag { padding: 6px 13px; font-size: 13px; color: var(--cream); background: rgba(126,224,138,0.10);
+  border: 1px solid var(--edge-soft); border-radius: 999px; }
 
 @media (max-height: 600px) {
   .side-bar { top: 42%; }

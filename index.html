@@ -347,23 +347,41 @@
       <span class="sp-label"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#9bf0a0" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01" stroke-linecap="round"/></svg>心情</span>
       <div class="sp-track"><div id="spMood" class="sp-fill"></div></div>
     </div>
+
+    <div class="sp-section">羁绊之路</div>
+    <div id="spLadder" class="sp-ladder"></div>
+
+    <div class="sp-section">心意收藏</div>
+    <div id="spCollection" class="sp-collection"></div>
+
     <div id="spDays" class="sp-days">和喵喵相伴第 1 天</div>
     <div id="spTheme" class="sp-theme"></div>
     <div class="sp-link-row">
       <button id="spOpenDiary" class="sp-cfg-link">日记</button>
+      <button id="spOpenMemory" class="sp-cfg-link">记忆</button>
       <button id="spOpenGallery" class="sp-cfg-link">回廊</button>
       <button id="spOpenCfg" class="sp-cfg-link">设置</button>
     </div>
   </div>
 </div>
 
-<!-- Diary panel — append-only log of life moments -->
+<!-- Diary panel — append-only log of life moments (a little bound book) -->
 <div id="diaryPanel" class="status-panel hidden">
-  <div class="sp-card">
+  <div class="sp-card diary-book">
     <button id="diaryClose" class="sp-close" aria-label="关闭"><i class="ic" data-icon="close"></i></button>
-    <div class="sp-title">喵喵的日记</div>
+    <div class="sp-title">喵喵的日记本</div>
     <div id="diaryList" class="diary-list"></div>
-    <div class="cfg-hint">喵喵会把和你之间的小事偷偷写下来。</div>
+    <div class="cfg-hint">喵喵会把和你之间的小事，悄悄写进这本日记里。</div>
+  </div>
+</div>
+
+<!-- Memory panel — what the cat remembers about you -->
+<div id="memoryPanel" class="status-panel hidden">
+  <div class="sp-card mem-board">
+    <button id="memClose" class="sp-close" aria-label="关闭"><i class="ic" data-icon="close"></i></button>
+    <div class="sp-title">喵喵记得的事</div>
+    <div id="memoryList" class="mem-list"></div>
+    <div class="cfg-hint">聊天时它会悄悄记住你提到的喜好和小事。</div>
   </div>
 </div>
 
