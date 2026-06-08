@@ -20,6 +20,16 @@ import type { FaceConfig } from "./CatRenderer";
 const FADE = 0.25; // s — cross-fade for ambient LOOPS (idle/walk/run/sleep)
 const FALLBACK_DUR = 1.2; // s — when a clip duration is unknown
 
+// Some v5/v6 "galgame" clips were authored with very small head/ear-only motion
+// — so subtle (peak movement BELOW idle's own breathing, per dev/_look.mjs) that
+// they read as static / "broken". Amplify their keyframe rotations + translations
+// away from the clip's first (≈rest) pose at load so the runtime cat actually
+// moves. Conservative factors to avoid mesh intersection; re-tune via the probe.
+const AMPLIFY: Record<string, number> = {
+  headpat: 2.4, adore: 2.2, ponder: 2.2, shy: 2.0, nod: 1.9,
+  playbow: 1.7, lickpaw: 1.7, pounce: 1.6, headtilt: 1.6,
+};
+
 export interface CatModelOpts {
   /** GLB url. Defaults to the app's character GLB under BASE_URL. */
   src?: string;
@@ -213,6 +223,9 @@ export class CatModel {
 
     this.mixer = new THREE.AnimationMixer(root);
     for (const clip of gltf.animations) {
+      if (clip.name === "backflip") repairBackflip(clip);  // un-break the 360° flip
+      const gain = AMPLIFY[clip.name];
+      if (gain) amplifyClip(clip, gain);   // boost the too-subtle galgame clips
       this.actions.set(clip.name, this.mixer.clipAction(clip));
     }
 
@@ -348,6 +361,58 @@ export class CatModel {
     this.mixer = null;
     this.currentAction = null;
     this.actions.clear();
+  }
+}
+
+/** Rebuild the backflip's Hips rotation as a CONTINUOUS −360° X-sweep. A full
+ *  single-bone rotation can't survive the glTF export (Blender bakes each frame
+ *  to a rotation matrix, which only knows rotation mod 360° → past 180° the
+ *  quaternion "unwinds", so the exported track ramps 0°→180° then back to 0°,
+ *  and the cat tips over and reverses instead of flipping). We know it's a
+ *  continuous −360° about local X over the authored window (frames 14→38 of a
+ *  48-frame/2.0s clip), so regenerate that one track's quaternions to match the
+ *  (correct) position arc. Per-frame keys (~15° apart) keep slerp on the forward
+ *  path. */
+function repairBackflip(clip: THREE.AnimationClip): void {
+  const track = clip.tracks.find((t) => /(^|[/.])Hips\.quaternion$/.test(t.name)) as
+    | THREE.QuaternionKeyframeTrack
+    | undefined;
+  if (!track) return;
+  const T0 = 14 / 24, T1 = 38 / 24; // flip ramp window in seconds (matches the position track)
+  const axisX = new THREE.Vector3(1, 0, 0);
+  const q = new THREE.Quaternion();
+  const times = track.times, v = track.values;
+  for (let i = 0; i < times.length; i++) {
+    const t = times[i];
+    const p = t <= T0 ? 0 : t >= T1 ? 1 : (t - T0) / (T1 - T0);
+    q.setFromAxisAngle(axisX, -2 * Math.PI * p); // 0 → −360°, continuous
+    q.toArray(v, i * 4);
+  }
+}
+
+/** Scale a clip's motion amplitude about its first keyframe (≈rest): quaternion
+ *  tracks extrapolate q0→qi by `factor` (a keyframe equal to the anchor is left
+ *  unchanged — no motion to amplify); position tracks scale the delta from v0.
+ *  Mutates the clip's track values in place at load time. */
+function amplifyClip(clip: THREE.AnimationClip, factor: number): void {
+  const q0 = new THREE.Quaternion();
+  const qi = new THREE.Quaternion();
+  for (const track of clip.tracks) {
+    const v = track.values;
+    if (track.name.endsWith(".quaternion") && v.length >= 4) {
+      q0.fromArray(v, 0);
+      for (let i = 0; i < v.length; i += 4) {
+        qi.fromArray(v, i);
+        q0.clone().slerp(qi, factor).normalize().toArray(v, i);
+      }
+    } else if (track.name.endsWith(".position") && v.length >= 3) {
+      const x0 = v[0], y0 = v[1], z0 = v[2];
+      for (let i = 0; i < v.length; i += 3) {
+        v[i]     = x0 + (v[i] - x0) * factor;
+        v[i + 1] = y0 + (v[i + 1] - y0) * factor;
+        v[i + 2] = z0 + (v[i + 2] - z0) * factor;
+      }
+    }
   }
 }
 
