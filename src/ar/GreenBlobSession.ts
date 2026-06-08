@@ -103,9 +103,11 @@ export class GreenBlobSession implements ArSession {
     this.t = opts.thresholds ?? DEFAULT_GREEN;
     this.fovDeg = opts.fovDeg ?? 50;
     this.depth = opts.depth ?? 3;
-    // Fixed prominent size (~cat fills most of the frame height at depth 3 / fov 50),
-    // independent of how much green is detected. ?sc= multiplies it via the mount.
-    this.baseScale = opts.baseScale ?? 1.3;
+    // Fixed prominent size (the cat fills a large share of the frame height at
+    // depth 3 / fov 50), independent of how much green is detected. Bumped 1.3→2.2
+    // after the first hardware test read "too small". ?sc= multiplies it via the
+    // mount; ?bs= overrides this base directly (both live-tunable).
+    this.baseScale = opts.baseScale ?? 2.2;
     this.smooth = opts.smooth ?? 0.35;
     this.sampleWidth = opts.sampleWidth ?? 192;
     this.foundFrames = opts.foundFrames ?? 2;

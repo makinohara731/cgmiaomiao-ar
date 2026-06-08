@@ -65,7 +65,7 @@ const plumb = st.plumb || {};
 const setup = st.setup || {};
 const checks = [
   ["cat ready", st.ready === true],
-  ["22 clips", st.clips === 22],
+  ["27 clips", st.clips === 27],
   // Track B — ThreeCatRenderer AR plumbing
   ["B: enterAR reparented + AR camera", plumb.enteredOk === true],
   ["B: AR vfov ≈ 45°", plumb.arFov >= 44 && plumb.arFov <= 46],

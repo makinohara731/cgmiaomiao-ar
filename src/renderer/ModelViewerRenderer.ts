@@ -39,6 +39,10 @@ interface ModelViewerEl extends HTMLElement {
 export class ModelViewerRenderer implements CatRenderer {
   constructor(private readonly mv: ModelViewerEl) {}
 
+  /** Bumped per playClip so a slower `updateComplete` from an earlier call can't
+   *  resolve after a newer one and play the stale clip (the documented race). */
+  private playSeq = 0;
+
   getClips(): string[] {
     return this.mv.availableAnimations || [];
   }
@@ -48,8 +52,10 @@ export class ModelViewerRenderer implements CatRenderer {
   }
 
   async playClip(name: string, loop: boolean): Promise<void> {
+    const seq = ++this.playSeq;
     this.mv.setAttribute("animation-name", name);
     await this.mv.updateComplete;
+    if (seq !== this.playSeq) return; // a newer playClip superseded this one
     this.mv.currentTime = 0;
     this.mv.play({ repetitions: loop ? Infinity : 1 });
   }

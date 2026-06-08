@@ -5,7 +5,7 @@ import type { FaceConfig } from "./CatRenderer";
 
 /**
  * CatModel — the cat as a self-contained three.js unit: the loaded Draco GLB, its
- * AnimationMixer + 22 clips (cross-faded, one-shots clamp), facial-expression
+ * AnimationMixer + 27 clips (cross-faded, one-shots clamp), facial-expression
  * head-texture swaps, face-toward orientation, and a soft contact shadow — all
  * parented under one `object3D` you can drop into ANY scene.
  *
@@ -18,7 +18,6 @@ import type { FaceConfig } from "./CatRenderer";
  */
 
 const FADE = 0.25; // s — cross-fade for ambient LOOPS (idle/walk/run/sleep)
-const ONESHOT_FADE = 0.06; // s — near-instant for one-shots so they read crisp
 const FALLBACK_DUR = 1.2; // s — when a clip duration is unknown
 
 export interface CatModelOpts {
@@ -114,19 +113,28 @@ export class CatModel {
     action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, loop ? Infinity : 1);
     action.clampWhenFinished = !loop; // one-shots hold their last frame
     action.setEffectiveTimeScale(1);
+    action.setEffectiveWeight(1);
     action.enabled = true;
-    // One-shots (attack/jump/wave/pounce…) snap in near-instantly so they read
-    // crisp like the old model-viewer hard-cut; only the ambient loops
-    // (idle↔walk↔run↔sleep) keep a smooth cross-fade. A 0.25s fade on every
-    // switch made reactive actions feel mushy at their start.
-    const fade = loop ? FADE : ONESHOT_FADE;
-    action.fadeIn(fade);
-    action.play();
 
-    // Fade out every OTHER action still influencing the pose, so rapid switches
-    // (A→B→C inside one fade window) don't pile up blended weight.
-    for (const other of this.actions.values()) {
-      if (other !== action && other.isRunning()) other.fadeOut(fade);
+    if (loop) {
+      // Ambient loops (idle↔walk↔run↔sleep) keep a smooth cross-fade so the gait
+      // blends; fade out every OTHER action still influencing the pose.
+      action.fadeIn(FADE);
+      action.play();
+      for (const other of this.actions.values()) {
+        if (other !== action && other.isRunning()) other.fadeOut(FADE);
+      }
+    } else {
+      // One-shots (attack/jump/wave/pounce/nod/adore…): HARD-CUT. Stop every other
+      // action instantly (no fade-out) and play this one at full weight from frame
+      // 0, so the clip's anticipation + peak frames read at 100% amplitude with no
+      // idle pose bleeding through to damp them. (Even a 0.06s fade-in let the
+      // earliest wind-up frames play under-weighted; the short galgame clips peak
+      // early enough that this visibly flattened them — the "动作幅度变小了" report.)
+      for (const other of this.actions.values()) {
+        if (other !== action && other.isRunning()) other.stop();
+      }
+      action.play();
     }
     this.currentAction = action;
   }
@@ -212,7 +220,7 @@ export class CatModel {
     // turns it in place — rotation about the model centre, not the local origin.
     // Re-centring leaves the world position unchanged (model offset by −centre,
     // pivot by +centre). SAFE because no clip animates the scene-root node: all
-    // 22 clips drive Hips and below (animate_v2.py), so the mixer never
+    // 27 clips drive Hips and below (animate_v2.py), so the mixer never
     // overwrites root.position and un-centres the pivot. A future re-rig that
     // bakes root motion would break this — keep root motion off the scene-root.
     root.updateWorldMatrix(true, true);

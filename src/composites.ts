@@ -37,60 +37,75 @@ export function configure(opts) {
   Object.assign(cfg, opts);
 }
 
-// ---- Each composite is a plain function returning total ms. ----
+// ---- Scheduler: cancellable timed steps ----
+// Each composite schedules its steps via at(); play() cancels the previous
+// routine's pending steps and bumps a token so any straggler timer no-ops. This
+// is what fixed the "按动作按钮不显示/卡顿" bug: rapid taps used to leave a
+// finished composite's orphaned setTimeouts firing playAnim over the new action.
+let pendingTimers: ReturnType<typeof setTimeout>[] = [];
+let activeToken = 0;
+
+function clearPending() {
+  for (const id of pendingTimers) clearTimeout(id);
+  pendingTimers.length = 0;
+}
+
+/** Schedule one step of the current routine; it no-ops if a newer play()/cancel()
+ *  superseded this run (so an interrupted composite goes fully silent). The first
+ *  step is scheduled at 0 too, so nothing fires synchronously in play() — letting
+ *  play() claim catState BEFORE step 0 runs. */
+function at(ms: number, fn: () => void) {
+  const my = activeToken;
+  pendingTimers.push(setTimeout(() => { if (my === activeToken) fn(); }, ms));
+}
+
+// ---- Each composite is a plain function returning total ms. It only SCHEDULES
+//      its steps via at(); the steps fire after play() has claimed catState. ----
 
 function think() {
-  cfg.emote("💭");
-  cfg.playAnim("stretch");
-  setTimeout(() => cfg.sayLine("唔…让我想想喵"), 350);
-  setTimeout(() => cfg.emote("❓"), 1600);
-  setTimeout(() => cfg.playAnim("lookaround"), 1800);
+  at(0,    () => { cfg.emote("💭"); cfg.playAnim("stretch"); });
+  at(350,  () => cfg.sayLine("唔…让我想想喵"));
+  at(1600, () => cfg.emote("❓"));
+  at(1800, () => cfg.playAnim("lookaround"));
   return 3400;
 }
 
 function peek() {
-  cfg.emote("❓");
-  cfg.playAnim("sniff");
-  cfg.audio.playChirp?.();
-  setTimeout(() => cfg.playAnim("lookaround"), 900);
-  setTimeout(() => cfg.emote("👀"), 1100);
-  setTimeout(() => cfg.playAnim("sniff"), 1800);
+  at(0,    () => { cfg.emote("❓"); cfg.playAnim("sniff"); cfg.audio.playChirp?.(); });
+  at(900,  () => cfg.playAnim("lookaround"));
+  at(1100, () => cfg.emote("👀"));
+  at(1800, () => cfg.playAnim("sniff"));
   return 3200;
 }
 
 function dance() {
-  cfg.emote("♪");
-  cfg.playAnim("spin");
-  cfg.audio.playTrill?.();
-  setTimeout(() => { cfg.emote("🎵"); cfg.playAnim("twirl"); }, 1100);
-  setTimeout(() => { cfg.emote("✨"); cfg.playAnim("jump");  }, 2400);
-  setTimeout(() => { cfg.emote("♪"); cfg.playAnim("happy");  }, 3300);
+  at(0,    () => { cfg.emote("♪"); cfg.playAnim("spin"); cfg.audio.playTrill?.(); });
+  at(1100, () => { cfg.emote("🎵"); cfg.playAnim("twirl"); });
+  at(2400, () => { cfg.emote("✨"); cfg.playAnim("jump");  });
+  at(3300, () => { cfg.emote("♪"); cfg.playAnim("happy");  });
   return 4800;
 }
 
 function sneeze() {
-  cfg.emote("💨");
-  cfg.playAnim("sniff");
-  setTimeout(() => { cfg.emote("💥"); cfg.playAnim("hurt"); cfg.audio.playHurt?.(); }, 700);
-  setTimeout(() => cfg.sayLine("阿…阿嚏！"), 950);
-  setTimeout(() => cfg.playAnim("groom"), 2100);
+  at(0,    () => { cfg.emote("💨"); cfg.playAnim("sniff"); });
+  at(700,  () => { cfg.emote("💥"); cfg.playAnim("hurt"); cfg.audio.playHurt?.(); });
+  at(950,  () => cfg.sayLine("阿…阿嚏！"));
+  at(2100, () => cfg.playAnim("groom"));
   return 3500;
 }
 
 function beg() {
-  cfg.emote("🥺");
-  cfg.playAnim("wave");
-  setTimeout(() => cfg.sayLine("给我一点点嘛～"), 600);
-  setTimeout(() => { cfg.emote("❤️"); cfg.playAnim("happy"); cfg.audio.playPurr?.(); }, 1800);
+  at(0,    () => { cfg.emote("🥺"); cfg.playAnim("wave"); });
+  at(600,  () => cfg.sayLine("给我一点点嘛～"));
+  at(1800, () => { cfg.emote("❤️"); cfg.playAnim("happy"); cfg.audio.playPurr?.(); });
   return 3400;
 }
 
 function stargaze() {
-  cfg.emote("💫");
-  cfg.playAnim("lookaround");
-  setTimeout(() => cfg.sayLine("星星…在闪耀呢喵"), 900);
-  setTimeout(() => { cfg.emote("✨"); cfg.playAnim("stretch"); }, 2200);
-  setTimeout(() => cfg.playAnim("lookaround"), 3500);
+  at(0,    () => { cfg.emote("💫"); cfg.playAnim("lookaround"); });
+  at(900,  () => cfg.sayLine("星星…在闪耀呢喵"));
+  at(2200, () => { cfg.emote("✨"); cfg.playAnim("stretch"); });
+  at(3500, () => cfg.playAnim("lookaround"));
   return 4800;
 }
 
@@ -98,65 +113,57 @@ function stargaze() {
 
 // stalk — slow sniff stalking → sudden pounce (attack)
 function stalk() {
-  cfg.emote("👀");
-  cfg.playAnim("sniff");
-  setTimeout(() => { cfg.emote("👁"); cfg.playAnim("walk"); }, 900);
-  setTimeout(() => { cfg.emote("💢"); cfg.playAnim("attack"); cfg.audio.playHit?.(); }, 2400);
-  setTimeout(() => { cfg.emote("✨"); cfg.playAnim("happy"); }, 3200);
+  at(0,    () => { cfg.emote("👀"); cfg.playAnim("sniff"); });
+  at(900,  () => { cfg.emote("👁"); cfg.playAnim("walk"); });
+  at(2400, () => { cfg.emote("💢"); cfg.playAnim("attack"); cfg.audio.playHit?.(); });
+  at(3200, () => { cfg.emote("✨"); cfg.playAnim("happy"); });
   return 4400;
 }
 
 // zoomies — sudden burst of run + spin + run (cat 5pm energy)
 function zoomies() {
-  cfg.emote("💨");
-  cfg.playAnim("run");
-  setTimeout(() => cfg.sayLine("呀呀呀～!"), 200);
-  setTimeout(() => { cfg.emote("🌀"); cfg.playAnim("spin"); }, 1200);
-  setTimeout(() => cfg.playAnim("run"), 2200);
-  setTimeout(() => { cfg.emote("💥"); cfg.playAnim("jump"); cfg.audio.playTrill?.(); }, 3300);
+  at(0,    () => { cfg.emote("💨"); cfg.playAnim("run"); });
+  at(200,  () => cfg.sayLine("呀呀呀～!"));
+  at(1200, () => { cfg.emote("🌀"); cfg.playAnim("spin"); });
+  at(2200, () => cfg.playAnim("run"));
+  at(3300, () => { cfg.emote("💥"); cfg.playAnim("jump"); cfg.audio.playTrill?.(); });
   return 4400;
 }
 
 // knead — soft kneading via repeated groom + content happy
 function knead() {
-  cfg.emote("❤️");
-  cfg.playAnim("groom");
-  cfg.audio.playPurr?.();
-  setTimeout(() => cfg.sayLine("呼噜呼噜…"), 500);
-  setTimeout(() => cfg.playAnim("happy"), 1800);
-  setTimeout(() => cfg.playAnim("groom"), 3000);
+  at(0,    () => { cfg.emote("❤️"); cfg.playAnim("groom"); cfg.audio.playPurr?.(); });
+  at(500,  () => cfg.sayLine("呼噜呼噜…"));
+  at(1800, () => cfg.playAnim("happy"));
+  at(3000, () => cfg.playAnim("groom"));
   return 4500;
 }
 
 // headbutt — affectionate bump: walk in, gentle attack ("bonk"), happy
 function headbutt() {
-  cfg.emote("💚");
-  cfg.playAnim("walk");
-  setTimeout(() => { cfg.emote("💢"); cfg.playAnim("attack"); cfg.audio.playMeow?.(); }, 1100);
-  setTimeout(() => { cfg.emote("❤️"); cfg.playAnim("happy"); }, 2300);
-  setTimeout(() => cfg.sayLine("撞撞你～"), 2500);
+  at(0,    () => { cfg.emote("💚"); cfg.playAnim("walk"); });
+  at(1100, () => { cfg.emote("💢"); cfg.playAnim("attack"); cfg.audio.playMeow?.(); });
+  at(2300, () => { cfg.emote("❤️"); cfg.playAnim("happy"); });
+  at(2500, () => cfg.sayLine("撞撞你～"));
   return 3700;
 }
 
 // scratch — itchy groom-groom-hurt sequence
 function scratch() {
-  cfg.emote("✋");
-  cfg.playAnim("groom");
-  setTimeout(() => { cfg.emote("💢"); cfg.playAnim("hurt"); cfg.audio.playHurt?.(); }, 800);
-  setTimeout(() => cfg.sayLine("哎呀，痒痒喵"), 1100);
-  setTimeout(() => { cfg.emote("✨"); cfg.playAnim("groom"); }, 2200);
+  at(0,    () => { cfg.emote("✋"); cfg.playAnim("groom"); });
+  at(800,  () => { cfg.emote("💢"); cfg.playAnim("hurt"); cfg.audio.playHurt?.(); });
+  at(1100, () => cfg.sayLine("哎呀，痒痒喵"));
+  at(2200, () => { cfg.emote("✨"); cfg.playAnim("groom"); });
   return 3500;
 }
 
 // playdead — drama: hurt → sleep → stretch back up
 function playdead() {
-  cfg.emote("💥");
-  cfg.playAnim("hurt");
-  cfg.audio.playHurt?.();
-  setTimeout(() => cfg.sayLine("我…倒下啦…"), 600);
-  setTimeout(() => { cfg.emote("💤"); cfg.playAnim("sleep"); }, 1700);
-  setTimeout(() => { cfg.emote("☀️"); cfg.playAnim("stretch"); cfg.audio.playYawn?.(); }, 3800);
-  setTimeout(() => cfg.sayLine("骗你的，喵～"), 4400);
+  at(0,    () => { cfg.emote("💥"); cfg.playAnim("hurt"); cfg.audio.playHurt?.(); });
+  at(600,  () => cfg.sayLine("我…倒下啦…"));
+  at(1700, () => { cfg.emote("💤"); cfg.playAnim("sleep"); });
+  at(3800, () => { cfg.emote("☀️"); cfg.playAnim("stretch"); cfg.audio.playYawn?.(); });
+  at(4400, () => cfg.sayLine("骗你的，喵～"));
   return 5600;
 }
 
@@ -184,7 +191,16 @@ export const META = {
 export function play(name) {
   const fn = REGISTRY[name];
   if (!fn) return 0;
-  const dur = fn() || 2000;
-  cfg.busyUntil(dur);
+  clearPending();            // cancel the previous routine's pending steps
+  activeToken++;             // invalidate any straggler timer that already queued
+  const dur = fn() || 2000;  // fn() only SCHEDULES via at(); nothing runs yet
+  cfg.busyUntil(dur);        // claim catState BEFORE step 0's timer fires
   return dur;
+}
+
+/** Interrupt any running routine — call before a user-driven single clip so its
+ *  pending steps can't stamp over the new action. */
+export function cancel() {
+  clearPending();
+  activeToken++;
 }

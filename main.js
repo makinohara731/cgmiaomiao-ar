@@ -596,6 +596,7 @@ async function playAnim(name) {
 // A move the *user* explicitly asked for (button / voice / chat).
 function userPlay(name) {
   bumpInteract();
+  composites.cancel();                    // interrupt any running routine's pending steps
   if (name === "sleep") life.asleep = true;
   else wakeForUser();                     // any other explicit action wakes the cat
   emote(EMOTE_FOR[name] || "");
@@ -2274,9 +2275,9 @@ const useMindAr = arQuery.get("ar") === "mind";
 // back to their own defaults); numParam → a concrete fallback for seating.
 const optNum = (k) => { const v = arQuery.get(k); if (v == null || v === "") return undefined; const n = Number(v); return Number.isNaN(n) ? undefined : n; };
 const numParam = (k, d) => { const v = optNum(k); return v == null ? d : v; };
-// Green mode stands the cat upright facing the viewer (rotX/rotY 0); size comes
-// from the detected blob so the mount scale stays 1. MindAR mode lays the cat
-// onto the flat card (rotX 90).
+// Green mode stands the cat upright facing the viewer; size is a FIXED baseScale
+// in GreenBlobSession (the green only positions it), so the mount scale stays 1
+// (tune live with ?sc= / ?bs=). MindAR mode lays the cat onto the flat card (rotX 90).
 const AR_SEATING = useMindAr
   ? { scale: numParam("sc", 0.5), rotXDeg: numParam("rx", 90), rotYDeg: numParam("ry", 0), lift: numParam("lift", 0) }
   // Green mode: a gentle 22° yaw gives the flattering 3/4 read the fallback view
@@ -2294,6 +2295,7 @@ function makeArSession() {
     depth: optNum("depth"),
     sizeK: optNum("gk"),
     smooth: optNum("gsm"),
+    baseScale: optNum("bs"),   // cat size; undefined → GreenBlobSession default (2.2)
   });
 }
 
