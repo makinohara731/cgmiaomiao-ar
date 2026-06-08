@@ -378,6 +378,38 @@ body.ar-mode .env-layer { display: none; }
 }
 .ar-hint-swatch { background: #00d800; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.25); }
 
+/* --- AR mode: surface the soul layer over the live camera (calm: ≤1 persistent
+   element + transient callouts). The bond chip becomes a slim affection ribbon;
+   panels reflow as a translucent bottom sheet; unlock/bond moments float near
+   the cat. Force the dark-theme token set so text stays legible over video. --- */
+body.ar-mode .bond-chip {
+  top: 12px; left: 50%; right: auto; transform: translateX(-50%);
+  padding: 5px 18px 8px; border-radius: 999px; color: #fff;
+  background: rgba(18,26,22,0.36); backdrop-filter: blur(13px);
+  border: 1px solid rgba(255,255,255,0.16); box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+body.ar-mode .bond-chip::after { left: 16px; right: 16px; }
+body.ar-mode .status-panel {
+  align-items: flex-end; background: rgba(0,0,0,0.34);
+  --cream: #f4f7f0; --cream-dim: #cfe0d0; --muted: #9fb3a3; --faint: #80927f;
+  --edge: rgba(255,255,255,0.16); --edge-soft: rgba(255,255,255,0.10);
+  --surface: linear-gradient(165deg, rgba(20,30,25,0.88), rgba(12,20,16,0.92));
+}
+body.ar-mode .sp-card {
+  width: 100%; max-width: 600px; border-radius: 24px 24px 0 0;
+  backdrop-filter: blur(22px); box-shadow: 0 -16px 50px rgba(0,0,0,0.5);
+}
+#arCaption {
+  position: fixed; left: 50%; top: 34%; transform: translate(-50%, 10px);
+  z-index: 46; max-width: 78vw; padding: 9px 18px; text-align: center;
+  background: rgba(18,26,22,0.5); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.22); border-radius: 16px;
+  color: #fff; font-family: var(--font-display); font-size: 16px; letter-spacing: 0.5px;
+  text-shadow: 0 2px 14px rgba(0,0,0,0.55);
+  opacity: 0; pointer-events: none; transition: opacity 0.4s ease, transform 0.4s ease;
+}
+#arCaption.show { opacity: 1; transform: translate(-50%, 0); }
+
 /* === Storybook environment (now deep + atmospheric via tokens) === */
 .env-layer { position: fixed; left: 0; right: 0; pointer-events: none; z-index: 0; transition: opacity 0.8s ease; }
 #envSun, #envMoon { left: auto; right: 26px; top: 30px; transition: opacity 1s ease; opacity: 0.9; }

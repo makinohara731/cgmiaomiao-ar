@@ -1148,6 +1148,28 @@ function openNicknameDialog() {
 let bondChainTimers = [];
 function clearBondChain() { bondChainTimers.forEach(clearTimeout); bondChainTimers = []; }
 
+// Soul-layer notice — in AR it floats near the cat as part of the scene (over
+// the live camera) so 解锁/羁绊 moments are felt in the AR experience itself;
+// otherwise the normal top toast.
+let arCaptionEl = null;
+function showArCaption(text, ms = 3400) {
+  if (!arCaptionEl) {
+    arCaptionEl = document.createElement("div");
+    arCaptionEl.id = "arCaption";
+    document.body.appendChild(arCaptionEl);
+  }
+  arCaptionEl.textContent = text;
+  arCaptionEl.classList.remove("show");
+  void arCaptionEl.offsetWidth;
+  arCaptionEl.classList.add("show");
+  clearTimeout(arCaptionEl._t);
+  arCaptionEl._t = setTimeout(() => arCaptionEl.classList.remove("show"), ms);
+}
+function soulNotice(text, ms = 4200) {
+  if (arMode) showArCaption(text, ms);
+  else showStatus(text, ms);
+}
+
 function triggerBondEvent(stage) {
   const ev = BOND_EVENTS[stage.name];
   if (!ev || life.seenEvents.includes(stage.name)) return;
@@ -1160,11 +1182,11 @@ function triggerBondEvent(stage) {
   const u = STAGE_UNLOCK[stage.name];
   if (u) {
     grantUnlock(u.key);
-    showStatus(`🎁 解锁 —— ${u.label}`, 4500);
+    soulNotice(`解锁 · ${u.label}`, 4500);
   }
   story.onBondStage(stage.name); // P4: record stage + sync endings (sees the just-granted unlock)
   catState.enter("dialogue", ev.lines.length * 3400 + 2000);
-  showStatus(`✨ 羁绊加深 —— ${stage.name}`, 4200);
+  soulNotice(`羁绊加深 · ${stage.name}`, 4200);
   flashExpression("love", 2600);            // heart eyes at the bond moment
   if (ev.anim && renderer.hasClip(ev.anim)) {
     playAnim(ev.anim);
