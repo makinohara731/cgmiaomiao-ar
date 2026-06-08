@@ -2456,12 +2456,15 @@ async function enterArMode() {
   document.body.classList.add("ar-mode");
   const v = arSession.video();
   if (v && sceneEl) { v.classList.add("ar-feed"); sceneEl.insertBefore(v, catCanvas); }
-  if (camBtn) { camBtn.textContent = "✕"; camBtn.classList.add("active"); }
+  if (camBtn) { camBtn.innerHTML = ICON.close; camBtn.classList.add("active"); }
   bumpInteract();
   showArHint();
   sayLine(useMindAr
     ? pickFrom(["把卡片对准我，我就出来啦！", "喵～对准标记卡看看！"])
     : pickFrom(["给我看一块纯绿色，我就出现啦！", "喵～拿块绿色的东西对准镜头！"]));
+  // P2.5/P2.6: bring hand-gesture / facial-expression / body-pose recognition
+  // into the real AR camera stream (volume reactions already work via the mic).
+  initVision().then(() => { if (arMode) startVisionLoop(); });
 }
 
 function exitArMode() {
@@ -2475,6 +2478,9 @@ function exitArMode() {
     if (v) v.classList.remove("ar-feed");
   }
   hideArHint();
+  if (visionRAF) { cancelAnimationFrame(visionRAF); visionRAF = null; }
+  lastGestureName = "";
+  if (arCaptionEl) arCaptionEl.classList.remove("show");
   if (camBtn) { camBtn.innerHTML = ICON.cam; camBtn.classList.remove("active"); }
 }
 
@@ -2502,6 +2508,7 @@ window.addEventListener("pagehide", () => { if (camMode) exitCamMode(); if (arMo
 // =====================================================================
 let gestureRecognizer = null;
 let faceLandmarker = null;
+let poseLandmarker = null;
 let visionLoading = false;
 let visionReady = false;
 let visionRAF = null;
@@ -2524,7 +2531,7 @@ async function initVision() {
   visionLoading = true;
   try {
     const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision");
-    const { GestureRecognizer, FaceLandmarker, FilesetResolver } = vision;
+    const { GestureRecognizer, FaceLandmarker, PoseLandmarker, FilesetResolver } = vision;
     const files = await FilesetResolver.forVisionTasks(
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm");
     gestureRecognizer = await GestureRecognizer.createFromOptions(files, {
@@ -2541,8 +2548,19 @@ async function initVision() {
       },
       runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true,
     });
+    // Body-pose loads separately so its failure (or a weak device) degrades to
+    // gesture+face only instead of killing all vision.
+    try {
+      poseLandmarker = await PoseLandmarker.createFromOptions(files, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+          delegate: "GPU",
+        },
+        runningMode: "VIDEO", numPoses: 1,
+      });
+    } catch (e) { console.warn("pose init failed (body gestures off):", e); }
     visionReady = true;
-    showStatus("手势 + 表情识别已开启 ✨", 2600);
+    showStatus("手势 / 表情 / 体感识别已开启", 2600);
   } catch (e) {
     console.warn("vision init failed:", e);
     showStatus("手势识别没能加载，仍可正常互动", 2800);
@@ -2550,21 +2568,36 @@ async function initVision() {
   visionLoading = false;
 }
 
+// The live <video> the vision models read: the AR session's feed in AR mode,
+// else the fallback cam feed. THIS is what brings gesture/face/pose into the
+// real green-block AR path (P2.5/P2.6) — it used to be hard-wired to camFeed.
+function visionSource() {
+  if (arMode) return (arSession && typeof arSession.video === "function") ? arSession.video() : null;
+  return camFeed;
+}
+
 function startVisionLoop() {
   if (!visionReady || visionRAF) return;
   const loop = () => {
-    if (!camMode) { visionRAF = null; return; }
+    if (!camMode && !arMode) { visionRAF = null; return; }
     visionRAF = requestAnimationFrame(loop);
     const now = performance.now();
     if (now - lastVisionAt < 130) return;        // throttle to ~7-8 fps
     lastVisionAt = now;
-    if (!camFeed || camFeed.readyState < 2) return;
+    const src = visionSource();
+    if (!src || src.readyState < 2) return;
     visionTick++;
+    // Round-robin ONE model per tick so adding pose doesn't raise per-frame cost
+    // (green-blob tracking keeps its own RAF). Per 5 ticks: 2×gesture, 2×face,
+    // 1×pose (~1.6 Hz) — pose is the heaviest + least latency-critical.
+    const slot = visionTick % 5;
     try {
-      if (visionTick % 2 === 0) {
-        handleGestures(gestureRecognizer.recognizeForVideo(camFeed, now));
+      if (slot === 4 && poseLandmarker) {
+        handlePose(poseLandmarker.detectForVideo(src, now));
+      } else if (slot % 2 === 0) {
+        handleGestures(gestureRecognizer.recognizeForVideo(src, now));
       } else {
-        handleFace(faceLandmarker.detectForVideo(camFeed, now));
+        handleFace(faceLandmarker.detectForVideo(src, now));
       }
     } catch (_) { /* a dropped frame — ignore */ }
   };
@@ -2636,6 +2669,46 @@ function handleFace(result) {
       flashExpression("love", 2200);        // heart eyes when you smile at it
       sayLine(pickFrom(["你笑起来真好看喵～", "看到你笑我也好开心！", "嘿嘿，对着我笑啦～"]));
     }
+  }
+}
+
+// React to FULL-BODY pose (MediaPipe Pose). Big gestural moves — debounced like
+// hand gestures (shared cooldown). 33 landmarks; we use shoulders/wrists/hips:
+//   双手举过肩 → 跳；张臂 T-pose → 转圈；俯身靠近(躯干变大) → 兴奋。
+let poseHist = [];
+function handlePose(result) {
+  const lms = result && result.landmarks && result.landmarks[0];
+  if (!lms || lms.length < 25) { poseHist = []; return; }
+  const lsh = lms[11], rsh = lms[12], lw = lms[15], rw = lms[16], lh = lms[23], rh = lms[24];
+  if (!lsh || !rsh || !lw || !rw) return;
+  // torso vertical span grows as the user leans in / approaches the lens
+  if (lh && rh) {
+    const span = Math.abs((lh.y + rh.y) / 2 - (lsh.y + rsh.y) / 2);
+    poseHist.push(span);
+    if (poseHist.length > 6) poseHist.shift();
+  }
+  if (Date.now() < visionCooldownUntil) return;
+  const fire = (anim, em, line, aff, fx) => {
+    visionCooldownUntil = Date.now() + 3500;
+    catState.enter("react", 2200);
+    life.lastInteract = Date.now();
+    if (aff) addAffection(aff);
+    emote(em);
+    playAnim(anim);
+    if (fx) flashExpression(fx, 2200);
+    sayLine(line);
+  };
+  const armsUp = lw.y < lsh.y - 0.04 && rw.y < rsh.y - 0.04;          // both wrists above shoulders
+  const tPose  = Math.abs(lw.y - lsh.y) < 0.13 && Math.abs(rw.y - rsh.y) < 0.13 &&
+                 Math.abs(lw.x - lsh.x) > 0.17 && Math.abs(rw.x - rsh.x) > 0.17; // wrists out at shoulder height
+  const leanedIn = poseHist.length >= 5 && poseHist[poseHist.length - 1] > poseHist[0] * 1.3;
+  if (tPose) {
+    fire("twirl", "✨", "张开手臂～看我转个圈！", 1);
+  } else if (armsUp) {
+    fire("jump", "⤴️", "哇，举高高！我也跳一个！", 2);
+  } else if (leanedIn) {
+    poseHist = [];                                                     // reset so it fires once per approach
+    fire("happy", "❤️", "你靠近啦，让我好好看看你～", 1, "love");
   }
 }
 
