@@ -225,7 +225,12 @@ export class CatModel {
 
     this.mixer = new THREE.AnimationMixer(root);
     for (const clip of gltf.animations) {
-      if (clip.name === "backflip") repairBackflip(clip);  // un-break the 360° flip
+      // glTF export collapses ANY full 360° root rotation into a there-and-back
+      // (the quaternion reverses at 180°). Regenerate a clean continuous turn for
+      // EVERY clip that spins — spin/twirl had the same bug as backflip, unfixed.
+      if (clip.name === "backflip") repairRootSpin(clip, new THREE.Vector3(1, 0, 0), -2 * Math.PI, 14 / 24, 38 / 24);
+      else if (clip.name === "spin") repairRootSpin(clip, new THREE.Vector3(0, 1, 0), 2 * Math.PI, 4 / 24, 32 / 24);
+      else if (clip.name === "twirl") repairRootSpin(clip, new THREE.Vector3(0, 1, 0), 2 * Math.PI, 8 / 24, 40 / 24);
       const gain = AMPLIFY[clip.name];
       if (gain) amplifyClip(clip, gain);   // boost the too-subtle galgame clips
       this.actions.set(clip.name, this.mixer.clipAction(clip));
@@ -366,28 +371,31 @@ export class CatModel {
   }
 }
 
-/** Rebuild the backflip's Hips rotation as a CONTINUOUS −360° X-sweep. A full
- *  single-bone rotation can't survive the glTF export (Blender bakes each frame
- *  to a rotation matrix, which only knows rotation mod 360° → past 180° the
- *  quaternion "unwinds", so the exported track ramps 0°→180° then back to 0°,
- *  and the cat tips over and reverses instead of flipping). We know it's a
- *  continuous −360° about local X over the authored window (frames 14→38 of a
- *  48-frame/2.0s clip), so regenerate that one track's quaternions to match the
- *  (correct) position arc. Per-frame keys (~15° apart) keep slerp on the forward
- *  path. */
-function repairBackflip(clip: THREE.AnimationClip): void {
+/** Rebuild a clip's Hips rotation as a CONTINUOUS root spin. A full single-bone
+ *  360° rotation can't survive the glTF export: Blender bakes each frame to a
+ *  rotation matrix (rotation mod 360°), so past 180° the quaternion "unwinds" —
+ *  the exported track ramps 0°→180° then back to 0°, and the cat REVERSES
+ *  instead of going all the way around (the "转圈不连贯" report). Regenerate the
+ *  Hips quaternion as a clean continuous `totalRad` sweep about `axis` over the
+ *  [t0,t1]-second window. Per-frame keys keep slerp on the forward path.
+ *  Used for backflip (−360° X), spin and twirl (+360° Y). */
+function repairRootSpin(
+  clip: THREE.AnimationClip,
+  axis: THREE.Vector3,
+  totalRad: number,
+  t0: number,
+  t1: number
+): void {
   const track = clip.tracks.find((t) => /(^|[/.])Hips\.quaternion$/.test(t.name)) as
     | THREE.QuaternionKeyframeTrack
     | undefined;
   if (!track) return;
-  const T0 = 14 / 24, T1 = 38 / 24; // flip ramp window in seconds (matches the position track)
-  const axisX = new THREE.Vector3(1, 0, 0);
   const q = new THREE.Quaternion();
   const times = track.times, v = track.values;
   for (let i = 0; i < times.length; i++) {
     const t = times[i];
-    const p = t <= T0 ? 0 : t >= T1 ? 1 : (t - T0) / (T1 - T0);
-    q.setFromAxisAngle(axisX, -2 * Math.PI * p); // 0 → −360°, continuous
+    const p = t <= t0 ? 0 : t >= t1 ? 1 : (t - t0) / (t1 - t0);
+    q.setFromAxisAngle(axis, totalRad * p);
     q.toArray(v, i * 4);
   }
 }
