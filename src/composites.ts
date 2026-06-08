@@ -167,9 +167,61 @@ function playdead() {
   return 5600;
 }
 
+// ---- Autonomous idle ROUTINES — multi-clip chains the cat strings together on
+//      its own between moves (no buttons, no META). This is what makes it feel
+//      like it "has its own life": runBehavior picks one biased by personality.
+//      Kept calm — a single soft emote, no sayLine spam — since they fire
+//      ambiently every few seconds. ----
+
+function routine_groom() {            // lazy/gentle: tidy up, settle, glance around
+  at(0,    () => { cfg.emote("🧼"); cfg.playAnim("groom"); });
+  at(1300, () => cfg.playAnim("sit"));
+  at(2600, () => cfg.playAnim("lookaround"));
+  return 3900;
+}
+
+function routine_cozy() {             // lazy: curl up, lick a paw, groom
+  at(0,    () => cfg.playAnim("sit"));
+  at(1300, () => cfg.playAnim("lickpaw"));
+  at(2600, () => { cfg.emote("·ω·"); cfg.playAnim("groom"); });
+  return 3900;
+}
+
+function routine_curious() {          // neutral: look around, tilt, sniff
+  at(0,    () => { cfg.emote("❓"); cfg.playAnim("lookaround"); });
+  at(1200, () => cfg.playAnim("headtilt"));
+  at(2400, () => cfg.playAnim("sniff"));
+  return 3600;
+}
+
+function routine_hunt() {             // lively: sniff out, pounce, groom the win
+  at(0,    () => { cfg.emote("👀"); cfg.playAnim("sniff"); });
+  at(1200, () => { cfg.emote("💢"); cfg.playAnim("pounce"); cfg.audio.playChirp?.(); });
+  at(2500, () => cfg.playAnim("groom"));
+  return 3900;
+}
+
+function routine_zoom() {             // lively: zoomies — run, spin, jump, happy
+  at(0,    () => { cfg.emote("💨"); cfg.playAnim("run"); });
+  at(1100, () => { cfg.emote("🌀"); cfg.playAnim("spin"); });
+  at(2300, () => cfg.playAnim("jump"));
+  at(3300, () => { cfg.emote("✨"); cfg.playAnim("happy"); cfg.audio.playTrill?.(); });
+  return 4500;
+}
+
+function routine_play() {             // lively: play-bow invite, pounce, spin
+  at(0,    () => { cfg.emote("🎈"); cfg.playAnim("playbow"); });
+  at(1300, () => cfg.playAnim("pounce"));
+  at(2600, () => cfg.playAnim("spin"));
+  return 3800;
+}
+
 export const REGISTRY = {
   think, peek, dance, sneeze, beg, stargaze,
   stalk, zoomies, knead, headbutt, scratch, playdead,
+  // autonomous idle routines (no buttons / META — driven by runBehavior)
+  routine_groom, routine_cozy, routine_curious,
+  routine_hunt, routine_zoom, routine_play,
 };
 
 // Display metadata for the animation bar buttons + status toasts.

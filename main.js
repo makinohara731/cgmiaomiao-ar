@@ -699,6 +699,20 @@ function runBehavior() {
     return;
   }
 
+  // Personality-biased multi-clip ROUTINE — the cat strings several actions into
+  // a little self-directed sequence (what gives it "its own life" rather than
+  // isolated twitches). Lazy/calm cats favour groom/cozy/curious; lively cats
+  // favour hunt/zoom/play. composites.play claims catState for the whole length
+  // so the chain isn't interrupted; a user tap still cancels it (composites.cancel).
+  const routineChance = clamp01(0.18 * pm.lively + 0.10 * pm.calm);
+  if (Math.random() < routineChance) {
+    const calmRoutines   = ["routine_groom", "routine_cozy", "routine_curious"];
+    const livelyRoutines = ["routine_hunt", "routine_zoom", "routine_play"];
+    const goLively = life.energy > 0.5 && life.mood > 0.55 && Math.random() < 0.5 * pm.lively;
+    composites.play(pickFrom(goLively ? livelyRoutines : calmRoutines));
+    return;
+  }
+
   const pool = [
     ["lookaround", 26 * pm.calm], ["groom", 16 * pm.calm], ["sniff", 13],
     ["stretch", 10 * pm.calm], ["nothing", 10],
