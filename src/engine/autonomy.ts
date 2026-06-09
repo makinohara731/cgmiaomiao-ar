@@ -16,6 +16,9 @@ import * as audio from "../audio";
 import { emote, showStatus } from "./feedback";
 import { setEyes, scheduleBlink } from "./expression";
 import { EMOTE_FOR } from "./emote-art";
+import { addAffection, lowestNeed } from "./soul/life";
+import { proactiveSpeak, seekCare } from "./soul/proactive";
+import { askQuestion, lastQuestionAt } from "./soul/questions";
 
 let controller: CatController | null = null;
 let behaviorTimer: number | undefined;
@@ -54,6 +57,7 @@ function runBehavior(): void {
   life.hunger = clamp01(life.hunger - 0.024 * pm.decayMul);
   life.energy = clamp01(life.energy - 0.03 * pm.decayMul);
   life.mood = clamp01(life.mood - 0.02 * pm.decayMul);
+  if (life.hunger < 0.1) addAffection(-0.5); // letting it starve hurts the bond
   notifyLife();
 
   // energy crash → doze off (more likely at night if the setting is on)
@@ -65,7 +69,16 @@ function runBehavior(): void {
     return;
   }
 
-  // M3: proactive speech (roll<0.24) / question (roll<0.32) / seekCare(lowestNeed)
+  // a low need overrides ambient life — the cat actively seeks care
+  if (cfg.proactive) {
+    const need = lowestNeed();
+    if (need) { seekCare(need); return; }
+  }
+
+  // ambient: a spontaneous thought, a question, or an idle micro-action.
+  const roll = Math.random();
+  if (roll < 0.24) { proactiveSpeak(); return; }
+  if (roll < 0.32 && life.affection >= 8 && now - lastQuestionAt > 50000) { askQuestion(); return; }
 
   // Personality-biased multi-clip routine.
   const routineChance = clamp01(0.18 * pm.lively + 0.10 * pm.calm);

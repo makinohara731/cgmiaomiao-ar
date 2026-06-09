@@ -14,7 +14,9 @@ export function showStatus(msg: string, ms = 2400): void {
   showToast(msg, ms);
 }
 
-// Replaced by the real DialogueBox.say + duckBGM + speak() in M4/M5.
-export function sayLine(_text: string, _mood?: string): void {
-  /* M4/M5: render into the VN box + speak */
-}
+// sayLine is the single speech entry. The real implementation (DialogueBox.say
+// + duckBGM + TTS) is injected by engine/vn.ts via setSayImpl — kept injectable
+// so the many soul modules can `import { sayLine }` without a cycle through vn.
+let sayImpl: (text: string, mood?: string) => void = () => {};
+export function setSayImpl(fn: (text: string, mood?: string) => void): void { sayImpl = fn; }
+export function sayLine(text: string, mood?: string): void { sayImpl(text, mood); }

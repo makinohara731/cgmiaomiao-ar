@@ -18,10 +18,13 @@ import { emote, sayLine } from "./feedback";
 import { flashExpression } from "./expression";
 import { addAffection, hasUnlock } from "./soul/life";
 import { writeDiary } from "./soul/diary";
+import { getChoices } from "./vn";
 
-const choicesStub = {
-  show: (_items: any[], _onPick: (item: any, i: number) => void, _opts?: any) => {},
-  isOpen: () => false,
+// Defer to the real Choices instance once VnLayer has mounted (story beats only
+// fire on later proactive turns, by which point initVn has run).
+const choicesProxy = {
+  show: (items: any[], onPick: (item: any, i: number) => void, opts?: any) => getChoices()?.show(items, onPick, opts),
+  isOpen: () => getChoices()?.isOpen() ?? false,
 };
 
 export function configureEngine(controller: CatController, state: CatStateMachine): void {
@@ -50,7 +53,7 @@ export function configureEngine(controller: CatController, state: CatStateMachin
     emote,
     playAnim: (n: string) => controller.play(n),
     flashExpression,
-    choices: choicesStub,
+    choices: choicesProxy,
     busy: (ms: number) => state.enter("dialogue", ms),
     isBusy: () => controller.isBusy(),
     writeDiary,

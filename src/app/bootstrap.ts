@@ -16,6 +16,11 @@ import { startTimeOfDay, timeBucket } from "../engine/time-of-day";
 import { installPersistence, loadLife, loadMem, loadDiary, loadDaily, loadCfg } from "../engine/persistence";
 import { initExpression, setEyes, flashExpression } from "../engine/expression";
 import { initActions } from "../engine/actions";
+import { setRuntime } from "../engine/runtime";
+import { installBond, applyUnlocksOnLoad } from "../engine/soul/bond";
+import { dailyRoll } from "../engine/soul/daily";
+import { installPetting } from "../engine/petting";
+import "../engine/soul/naming"; // side-effect: hands openNicknameDialog to bond
 import { emote, showStatus, sayLine } from "../engine/feedback";
 import { pickFrom } from "../engine/util";
 import * as audio from "../audio";
@@ -60,7 +65,10 @@ export function start(opts: { modelViewer: HTMLElement; canvas: HTMLCanvasElemen
   });
   initAutonomy(controller);
   initActions(controller, state);
+  setRuntime(controller, state, renderer);   // soul/* modules drive the cat via this
+  installBond();                              // addAffection fires bond events
   configureEngine(controller, state);
+  installPetting(renderer.getInteractionTarget()); // tap = pet, long-press, empty-tap = look
   initFirstGesture();
   startTimeOfDay();
   installPersistence();
@@ -98,6 +106,8 @@ function onModelLoaded(): void {
   loadDiary();
   loadDaily();
   loadCfg();
+  dailyRoll();                     // pick today's mood theme (idempotent within a day)
+  applyUnlocksOnLoad();            // re-reveal unlocked keepsakes
   story.load();                    // load story state vs restored life
   notifyLife();
   initExpression(renderer);        // M2: faces + blink loop
