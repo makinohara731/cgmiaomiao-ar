@@ -1,11 +1,22 @@
 import { defineConfig } from "vite";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 
-// ar/ is the Vite root. index.html is the entry; main.js (→ main.ts) is its
-// module. Static runtime assets live in public/ (copied verbatim to dist/, so
-// runtime fetches like "character_v2.glb" / "textures/face_*.webp" keep working
-// at the site root). The model-viewer CDN <script> stays external (untouched).
+// ar/ is the Vite root. Static runtime assets live in public/ (copied verbatim
+// to dist/, so runtime fetches like "character_v2.glb" / "textures/face_*.webp"
+// keep working at the site root). The model-viewer CDN <script> stays external.
+//
+// During the Svelte rebuild (branch svelte-rebuild) there are TWO html entries:
+//   index.html   — the legacy main.js app (still the default until M7 cutover)
+//   svelte.html  — the new Svelte app (src/app/main.ts)
+// Both are served in dev; production `vite build` still emits index.html until
+// the cutover swaps it.
 export default defineConfig({
+  plugins: [svelte()],
   publicDir: "public",
+  // The kept renderer/AR modules import `three` + `three/addons`; without dedupe,
+  // Vite dev pre-bundles core vs addons as separate chunks → three's "Multiple
+  // instances" warning. One copy fixes it.
+  resolve: { dedupe: ["three"] },
   server: {
     host: "127.0.0.1",
     port: 8765, // matches the Worker CORS allowlist (:8765)
