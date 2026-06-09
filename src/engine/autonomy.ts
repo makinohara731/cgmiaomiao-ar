@@ -15,6 +15,7 @@ import * as composites from "../composites";
 import * as audio from "../audio";
 import { emote, showStatus } from "./feedback";
 import { setEyes, scheduleBlink } from "./expression";
+import { EMOTE_FOR } from "./emote-art";
 
 let controller: CatController | null = null;
 let behaviorTimer: number | undefined;
@@ -92,6 +93,7 @@ function runBehavior(): void {
     if (Math.random() < 0.5) emote(pickFrom(["♪", "·ω·", "～", "🌿"]));
     return;
   }
+  emote(EMOTE_FOR[pick] || "");
   controller.play(pick);
   if (["lookaround", "sniff", "groom"].includes(pick) && Math.random() < 0.4) audio.playChirp();
 }

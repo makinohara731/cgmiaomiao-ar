@@ -14,11 +14,14 @@ import { initAutonomy, setModelReady, scheduleBehavior } from "../engine/autonom
 import { initFirstGesture } from "../engine/device";
 import { startTimeOfDay, timeBucket } from "../engine/time-of-day";
 import { installPersistence, loadLife, loadMem, loadDiary, loadDaily, loadCfg } from "../engine/persistence";
-import { initExpression, setEyes } from "../engine/expression";
+import { initExpression, setEyes, flashExpression } from "../engine/expression";
+import { initActions } from "../engine/actions";
 import { emote, showStatus, sayLine } from "../engine/feedback";
 import { pickFrom } from "../engine/util";
+import * as audio from "../audio";
+import { bus, EVT } from "../bus";
 import { life, notifyLife } from "../stores/soul";
-import { modelReady, loaderHidden, degraded } from "../stores/session";
+import { modelReady, loaderHidden, degraded, currentClip } from "../stores/session";
 import { story } from "../story/StoryEngine";
 
 let renderer: CatRenderer;
@@ -56,6 +59,7 @@ export function start(opts: { modelViewer: HTMLElement; canvas: HTMLCanvasElemen
     renderer, state, isLoopClip, baseClip: baseAnim, onAnimPlayed,
   });
   initAutonomy(controller);
+  initActions(controller, state);
   configureEngine(controller, state);
   initFirstGesture();
   startTimeOfDay();
@@ -104,8 +108,18 @@ function onModelLoaded(): void {
   scheduleBehavior();              // start the autonomous life loop
 }
 
-function onAnimPlayed(_name: string, _loop: boolean): void {
-  // M2: per-clip SFX + flashExpression pairing + bus.emit(EVT.AnimPlayed).
+function onAnimPlayed(name: string, loop: boolean): void {
+  // Per-clip SFX + expression pairing (ported from main.js playAnim). Fires for
+  // BOTH user and autonomy plays — so e.g. an ambient `shy` still blushes.
+  if (name === "attack") audio.playHit();
+  if (name === "hurt") { audio.playHurt(); flashExpression("sad", 1900); }
+  if (name === "happy") { audio.playTrill(); flashExpression("happy", 1900); }
+  if (name === "shy") flashExpression("blush", 2000);
+  if (name === "ponder") flashExpression("think", 2200);
+  if (name === "adore") { audio.playTrill(); flashExpression(life.affection >= 60 ? "blush" : "love", 2200); }
+  if (name === "headpat") flashExpression("happy", 1900);
+  currentClip.set(name);           // anim-bar active highlight
+  bus.emit(EVT.AnimPlayed, { name, loop });
 }
 
 function doGreeting(): void {

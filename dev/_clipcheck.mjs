@@ -10,7 +10,7 @@ import { decodePNG } from "./png-min.mjs";
 import { mkdirSync } from "fs";
 mkdirSync("dev/_clipcheck", { recursive: true });
 
-const URL = "http://127.0.0.1:8765/";
+const URL = process.argv[2] || "http://127.0.0.1:8765/";
 const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
 
 function diffPct(b1, b2) {

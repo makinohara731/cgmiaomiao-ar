@@ -12,3 +12,5 @@ export const isRecording = writable(false);
 export const arMode = writable(false);
 export const camMode = writable(false);
 export const currentExpression = writable<string>("open");
+/** The clip currently playing — drives the anim-bar active highlight. */
+export const currentClip = writable<string>("idle");

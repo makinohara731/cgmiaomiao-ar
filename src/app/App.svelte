@@ -1,9 +1,11 @@
 <script lang="ts">
   import Scene from "../components/Scene.svelte";
   import Loader from "../components/Loader.svelte";
+  import AnimBar from "../components/AnimBar.svelte";
 </script>
 
 <Scene />
+<AnimBar />
 <Loader />
 
 <style>
