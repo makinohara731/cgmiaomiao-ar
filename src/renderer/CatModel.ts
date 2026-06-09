@@ -144,18 +144,27 @@ export class CatModel {
       // blends; fade out every OTHER action still influencing the pose.
       action.fadeIn(FADE);
       action.play();
+      // Fade out every other action still influencing the pose. CRITICAL: include
+      // `paused` actions — a finished one-shot (clampWhenFinished) PAUSES at its
+      // last frame and keeps applying it at weight 1, yet reports isRunning()===
+      // false. Without the paused check, those clamped poses linger and blend into
+      // the loop.
       for (const other of this.actions.values()) {
-        if (other !== action && other.isRunning()) other.fadeOut(FADE);
+        if (other !== action && (other.isRunning() || other.paused)) other.fadeOut(FADE);
       }
     } else {
       // One-shots (attack/jump/wave/pounce/nod/adore…): HARD-CUT. Stop every other
       // action instantly (no fade-out) and play this one at full weight from frame
       // 0, so the clip's anticipation + peak frames read at 100% amplitude with no
-      // idle pose bleeding through to damp them. (Even a 0.06s fade-in let the
-      // earliest wind-up frames play under-weighted; the short galgame clips peak
-      // early enough that this visibly flattened them — the "动作幅度变小了" report.)
+      // other pose bleeding through to damp them.
+      //
+      // The `|| other.paused` is the real fix for "动作幅度变小了": each finished
+      // one-shot stays enabled+clamped (paused) at weight 1 and KEEPS contributing
+      // its last frame — isRunning() is false for it, so the old isRunning-only
+      // stop left every prior one-shot (greeting + autonomous idles) accumulating
+      // into the bone binding, diluting the new clip to ~1/N amplitude.
       for (const other of this.actions.values()) {
-        if (other !== action && other.isRunning()) other.stop();
+        if (other !== action && (other.isRunning() || other.paused)) other.stop();
       }
       action.play();
     }
