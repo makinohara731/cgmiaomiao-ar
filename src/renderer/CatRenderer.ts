@@ -51,4 +51,16 @@ export interface CatRenderer {
   hasFace(name: string): boolean;
   /** Swap the head to a named face ("open" = neutral). No-ops if not ready. */
   setFace(name: string): void;
+  /**
+   * Register a callback fired when a ONE-SHOT clip reaches its end (the
+   * AnimationMixer 'finished' event for LoopOnce actions; the <model-viewer>
+   * 'finished' DOM event). The callback receives the finished clip's name.
+   * Returns an unsubscribe fn. Loop clips never fire this. Interrupting a
+   * one-shot with `.stop()` (the hard-cut path) does NOT fire it.
+   *
+   * This is what lets the host return to idle off the real end-of-clip event
+   * instead of a `setTimeout(duration)` race — the single source of truth for
+   * "the one-shot is done".
+   */
+  onClipFinished(cb: (clipName: string) => void): () => void;
 }

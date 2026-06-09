@@ -1,23 +1,17 @@
 <script lang="ts">
-  // M0 skeleton — proves the Svelte app mounts on :8765 alongside the legacy
-  // main.js app. Real shell (Scene + renderer + UI) arrives in M1+.
+  import Scene from "../components/Scene.svelte";
+  import Loader from "../components/Loader.svelte";
 </script>
 
-<main>
-  <h1>喵喵咕咯精灵</h1>
-  <p class="tag">Svelte 重建 · M0 skeleton</p>
-</main>
+<Scene />
+<Loader />
 
 <style>
-  main {
-    font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
-    color: #36473a;
-    display: grid;
-    place-content: center;
-    min-height: 100vh;
-    text-align: center;
-    background: linear-gradient(170deg, #eef5ea, #dde9d7);
+  /* The Svelte mount point sits between <body> (height:100%) and #scene
+     (height:100% of its parent). Without this, #app collapses to 0 height and
+     the renderer draws into a 0-height box (invisible cat). */
+  :global(#app) {
+    width: 100%;
+    height: 100%;
   }
-  h1 { font-size: 30px; letter-spacing: 0.06em; margin: 0; }
-  .tag { color: #8a978a; margin-top: 8px; }
 </style>

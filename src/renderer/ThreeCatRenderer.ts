@@ -175,6 +175,9 @@ export class ThreeCatRenderer implements CatRenderer {
   setFace(name: string): void {
     this.cat.setFace(name);
   }
+  onClipFinished(cb: (clipName: string) => void): () => void {
+    return this.cat.onClipFinished(cb);
+  }
 
   // ---- internals ----
 

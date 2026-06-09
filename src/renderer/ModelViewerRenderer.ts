@@ -43,6 +43,12 @@ export class ModelViewerRenderer implements CatRenderer {
    *  resolve after a newer one and play the stale clip (the documented race). */
   private playSeq = 0;
 
+  /** Last clip name passed to playClip — reported to onClipFinished listeners
+   *  (model-viewer's 'finished' event carries no clip name). */
+  private currentName = "";
+  private readonly finishedCbs = new Set<(name: string) => void>();
+  private finishedBound = false;
+
   getClips(): string[] {
     return this.mv.availableAnimations || [];
   }
@@ -53,6 +59,7 @@ export class ModelViewerRenderer implements CatRenderer {
 
   async playClip(name: string, loop: boolean): Promise<void> {
     const seq = ++this.playSeq;
+    this.currentName = name;
     this.mv.setAttribute("animation-name", name);
     await this.mv.updateComplete;
     if (seq !== this.playSeq) return; // a newer playClip superseded this one
@@ -114,5 +121,18 @@ export class ModelViewerRenderer implements CatRenderer {
     } catch {
       /* scene-graph API unavailable */
     }
+  }
+
+  onClipFinished(cb: (clipName: string) => void): () => void {
+    if (!this.finishedBound) {
+      this.finishedBound = true;
+      // model-viewer dispatches 'finished' when a non-looping animation ends.
+      // Its detail has no clip name, so report the last-played name.
+      this.mv.addEventListener("finished", () => {
+        for (const f of this.finishedCbs) { try { f(this.currentName); } catch { /* ignore */ } }
+      });
+    }
+    this.finishedCbs.add(cb);
+    return () => this.finishedCbs.delete(cb);
   }
 }

@@ -57,6 +57,9 @@ export class CatModel {
   private contactShadow: THREE.Mesh | null = null;
   private ready = false;
 
+  // Listeners for the mixer's 'finished' event (one-shot clip reached its end).
+  private readonly finishedCbs = new Set<(name: string) => void>();
+
   // facial expressions
   private headMaterial: THREE.MeshStandardMaterial | null = null;
   private neutralMap: THREE.Texture | null = null;
@@ -112,6 +115,12 @@ export class CatModel {
 
   hasClip(name: string): boolean {
     return this.actions.has(name);
+  }
+
+  /** Subscribe to one-shot clip completion (the mixer 'finished' event). */
+  onClipFinished(cb: (clipName: string) => void): () => void {
+    this.finishedCbs.add(cb);
+    return () => this.finishedCbs.delete(cb);
   }
 
   playClip(name: string, loop: boolean): void {
@@ -226,6 +235,15 @@ export class CatModel {
     this.root = root;
 
     this.mixer = new THREE.AnimationMixer(root);
+    // Fire onClipFinished when a one-shot (LoopOnce) clip reaches its end. The
+    // 'finished' event carries the action; reverse-map it to its clip name.
+    // (clampWhenFinished one-shots still emit 'finished'; an interrupting
+    // .stop() does NOT — so the hard-cut path stays silent here.)
+    this.mixer.addEventListener("finished", (e: { action: THREE.AnimationAction }) => {
+      let name = "";
+      for (const [n, a] of this.actions) if (a === e.action) { name = n; break; }
+      for (const cb of this.finishedCbs) { try { cb(name); } catch { /* listener error — ignore */ } }
+    });
     for (const clip of gltf.animations) {
       // glTF export collapses ANY full 360° root rotation into a there-and-back
       // (the quaternion reverses at 180°). Regenerate a clean continuous turn for
@@ -341,6 +359,7 @@ export class CatModel {
   /** Release all GPU resources owned by the cat (the host owns renderer/env). */
   dispose(): void {
     this.ready = false; // a disposed cat must not report ready (AR backend-swap)
+    this.finishedCbs.clear();
     this.mixer?.stopAllAction();
     if (this.root) {
       this.mixer?.uncacheRoot(this.root);
