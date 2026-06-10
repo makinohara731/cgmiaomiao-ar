@@ -11,3 +11,7 @@ dist/
 
 # Dev probe screenshots (throwaway)
 dev/_*.png
+
+# Dev probe output dirs (throwaway) — matches underscore-prefixed DIRS only,
+# so tracked gate probes dev/_m*check.mjs / _clipcheck.mjs / _strip.mjs etc. stay safe.
+dev/_*/
