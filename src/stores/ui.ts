@@ -10,6 +10,9 @@ export type PanelName = "status" | "cfg" | "diary" | "memory" | "gallery" | "cha
 
 export const openPanel = writable<PanelName>(null);
 export const animTrayOpen = writable(false);
+// The chat panel slides independently of the modal panels (old-app semantics:
+// #chatPanel.hidden is its own toggle, can overlap the status panel).
+export const chatOpen = writable(false);
 
 // Emote bubble.
 export const emoteGlyph = writable<{ glyph: string; nonce: number }>({ glyph: "", nonce: 0 });

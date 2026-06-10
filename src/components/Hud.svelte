@@ -1,23 +1,34 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { get } from "svelte/store";
   import { lifeStore, stage } from "../stores/soul";
-  import { emoteGlyph, statusToast, openPanel } from "../stores/ui";
-  import { isMuted } from "../stores/session";
+  import { emoteGlyph, statusToast, openPanel, chatOpen } from "../stores/ui";
+  import { isMuted, isRecording } from "../stores/session";
   import { EMOTE_ART } from "../ui/emoteArt";
   import { ICON } from "../ui/icons";
   import { feedCat } from "../engine/feed";
+  import { stopSpeaking } from "../engine/voice";
+  import { initVoiceInput } from "../engine/voice-input";
+  import { showStatus } from "../engine/feedback";
   import { bus, EVT } from "../bus";
   import { mountIcons } from "../ui/icons";
 
   let shimmer = false;
   let shimmerKey = 0;
+  let micBtnEl: HTMLButtonElement;
 
   onMount(() => {
     mountIcons();
+    initVoiceInput(micBtnEl); // press-and-hold mic → ASR → VOICE_MAP
     bus.on(EVT.BondUnlock, () => { shimmer = true; shimmerKey++; setTimeout(() => (shimmer = false), 1400); });
   });
 
-  function toggleMute() { isMuted.update((m) => !m); }
+  function toggleMute() {
+    isMuted.update((m) => !m);
+    const m = get(isMuted);
+    if (m) stopSpeaking(); // cut off the line being spoken right now
+    showStatus(m ? "已静音" : "已开声", 1000);
+  }
 
   $: emoteHtml = EMOTE_ART[$emoteGlyph.glyph] ?? "";
 </script>
@@ -54,5 +65,7 @@
 <!-- Side bar -->
 <div id="sideBar" class="side-bar">
   <button id="feedBtn" class="round-btn" title="喂食" aria-label="喂喵喵吃东西" onclick={feedCat}><i class="ic" data-icon="fish"></i></button>
-  <button id="muteBtn" class="round-btn" class:muted={$isMuted} title="静音" aria-label="音效" onclick={toggleMute}><i class="ic" data-icon="sound"></i></button>
+  <button id="micBtn" class="round-btn" class:recording={$isRecording} title="长按说话" aria-label="语音命令" bind:this={micBtnEl}><i class="ic" data-icon="mic"></i></button>
+  <button id="chatBtn" class="round-btn" title="跟猫聊天" aria-label="对话精灵" onclick={() => chatOpen.update((v) => !v)}><i class="ic" data-icon="chat"></i></button>
+  <button id="muteBtn" class="round-btn" class:muted={$isMuted} title="静音" aria-label="音效" onclick={toggleMute}><i class="ic">{@html $isMuted ? ICON.mute : ICON.sound}</i></button>
 </div>

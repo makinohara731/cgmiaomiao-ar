@@ -16,6 +16,7 @@ import { startTimeOfDay, timeBucket } from "../engine/time-of-day";
 import { installPersistence, loadLife, loadMem, loadDiary, loadDaily, loadCfg } from "../engine/persistence";
 import { initExpression, setEyes, flashExpression } from "../engine/expression";
 import { initActions } from "../engine/actions";
+import { initChat } from "../engine/chat";
 import { setRuntime } from "../engine/runtime";
 import { installBond, applyUnlocksOnLoad } from "../engine/soul/bond";
 import { dailyRoll } from "../engine/soul/daily";
@@ -62,6 +63,7 @@ export function start(opts: { modelViewer: HTMLElement; canvas: HTMLCanvasElemen
     w.__play = (name: string, _loop = false) => controller.play(name);
     w.__story = story;   // headless P4/M4 checks (parity with main.js)
     w.__saves = saves;
+    w.__busy = () => controller.isBusy(); // M5: catState-window release checks
   }
 
   state = new CatStateMachine();
@@ -77,6 +79,7 @@ export function start(opts: { modelViewer: HTMLElement; canvas: HTMLCanvasElemen
   initFirstGesture();
   startTimeOfDay();
   installPersistence();
+  initChat(); // offline fallback listener + body.is-offline + DEV hooks
 
   // model-viewer drives its own load event; wire it + the cached fast path
   // (the three backend funnels through onReady). Both are idempotent.
