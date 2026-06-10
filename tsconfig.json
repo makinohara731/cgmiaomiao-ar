@@ -16,5 +16,5 @@
     "verbatimModuleSyntax": false,
     "noEmit": true
   },
-  "include": ["main.js", "main.ts", "src/**/*", "vite.config.ts"]
+  "include": ["src/**/*", "vite.config.ts"]
 }
