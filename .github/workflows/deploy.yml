@@ -26,7 +26,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # npm install, not npm ci: the Windows-generated lockfile omits the
+      # Linux-only optional transitive deps (@emnapi/*, npm/cli#4828), which
+      # makes `npm ci`'s sync check fail on the runner.
+      - run: npm install --no-audit --no-fund
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
