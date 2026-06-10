@@ -8,6 +8,10 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 // index.html IS the Svelte app (src/app/main.ts) since the M7 cutover.
 export default defineConfig({
   plugins: [svelte()],
+  // Relative base: GitHub Pages serves the app under /cgmiaomiao-ar/, local
+  // preview at / — relative asset URLs work in both (BASE_URL becomes "./",
+  // which draco/targets/vendor/sw paths already resolve against the page URL).
+  base: "./",
   publicDir: "public",
   // The kept renderer/AR modules import `three` + `three/addons`; without dedupe,
   // Vite dev pre-bundles core vs addons as separate chunks → three's "Multiple
