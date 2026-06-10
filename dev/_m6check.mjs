@@ -7,7 +7,7 @@ import { createRequire } from "module";
 const require = createRequire("C:/Users/Lenovo/AppData/Roaming/npm/node_modules/");
 const puppeteer = require("puppeteer");
 
-const BASE = process.argv[2] || "http://127.0.0.1:8765/svelte.html";
+const BASE = process.argv[2] || "http://127.0.0.1:8765/";
 const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

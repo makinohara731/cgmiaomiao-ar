@@ -8,7 +8,8 @@
 import { life, cfg, mem, diary, daily, notifyLife, notifyCfg, notifyDiary } from "../stores/soul";
 import { story } from "../story/StoryEngine";
 import * as saves from "../story/saves";
-import { clamp01 } from "./util";
+import { writeDiary } from "./soul/diary";
+import { clamp01, localYMD } from "./util";
 import { applyTimeOfDay } from "./time-of-day";
 import { scheduleBehavior, stopBehavior } from "./autonomy";
 
@@ -85,7 +86,13 @@ export function loadDaily(): void {
 export function persistAll(): void {
   if (saves.isSuppressed()) return;
   saveLife(); saveMem(); saveDiary(); story.save();
-  // M3: once-per-day "今天的心情" diary line (needs dailyRoll + the diarized flag)
+  // Once-per-day "今天的心情" diary line, gated by the daily.diarized flag
+  // (dailyRoll resets it on a new day).
+  if (daily.theme && daily.ymd === localYMD() && !daily.diarized) {
+    writeDiary(`今天的心情：${daily.theme}`, "day");
+    daily.diarized = true;
+    saveDaily();
+  }
 }
 
 export function installPersistence(): void {

@@ -2,6 +2,7 @@
   import { onMount, tick } from "svelte";
   import { mountIcons } from "../ui/icons";
   import { openPanel } from "../stores/ui";
+  import EnvLayer from "../components/EnvLayer.svelte";
   import Scene from "../components/Scene.svelte";
   import Loader from "../components/Loader.svelte";
   import AnimBar from "../components/AnimBar.svelte";
@@ -26,6 +27,7 @@
   $: if ($openPanel) tick().then(() => mountIcons());
 </script>
 
+<EnvLayer />
 <Scene />
 <Hud />
 <AnimBar />

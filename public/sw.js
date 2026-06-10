@@ -1,11 +1,11 @@
-// Service worker — v4 release.
+﻿// Service worker — v4 release.
 // Strategy:
 //   * Navigation (HTML), CSS, JS, GLB, USDZ, MJS:  network-first with
 //     cache fallback (deploys are seen on next reload; offline still works).
 //   * Everything else (icons, fonts, textures):     cache-first (immutable-ish).
 //   * SSE endpoints (chat-stream):                  bypassed entirely;
 //     a SW that buffers an event-stream would break streaming.
-const CACHE_NAME = "miaomiao-v10";
+const CACHE_NAME = "miaomiao-v11";
 // Precache only STABLE-path assets. Since the Vite migration the JS/CSS ship as
 // hashed `assets/*.js|css` chunks (the old `./src/*.js` + `./style.css` here all
 // 404'd → the cache stayed empty). Those hashed bundles are now picked up by the

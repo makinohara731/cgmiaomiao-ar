@@ -5,11 +5,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 // to dist/, so runtime fetches like "character_v2.glb" / "textures/face_*.webp"
 // keep working at the site root). The model-viewer CDN <script> stays external.
 //
-// During the Svelte rebuild (branch svelte-rebuild) there are TWO html entries:
-//   index.html   — the legacy main.js app (still the default until M7 cutover)
-//   svelte.html  — the new Svelte app (src/app/main.ts)
-// Both are served in dev; production `vite build` still emits index.html until
-// the cutover swaps it.
+// index.html IS the Svelte app (src/app/main.ts) since the M7 cutover.
 export default defineConfig({
   plugins: [svelte()],
   publicDir: "public",
