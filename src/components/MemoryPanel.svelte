@@ -2,13 +2,14 @@
   import { mem } from "../stores/soul";
   import { catName } from "../stores/soul";
   import { openPanel } from "../stores/ui";
-  // mem is a plain object updated by chat (M5); this panel re-mounts on open so
-  // it reflects the current facts each time it's shown.
+  // mem is a plain object (mutated by chat in M5 + slot restore in M4) — re-read
+  // it each time the panel opens, keyed on $openPanel, so restored facts show.
   const by = (k: string) => mem.facts.filter((f) => f.k === k).map((f) => f.v);
-  $: likes = by("likes");
-  $: dislikes = by("dislikes");
-  $: facts = by("fact");
-  $: empty = !mem.facts.length && !mem.topics.length;
+  $: visible = $openPanel === "memory";
+  $: likes = visible ? by("likes") : [];
+  $: dislikes = visible ? by("dislikes") : [];
+  $: facts = visible ? by("fact") : [];
+  $: empty = visible && !mem.facts.length && !mem.topics.length;
 </script>
 
 {#if $openPanel === "memory"}

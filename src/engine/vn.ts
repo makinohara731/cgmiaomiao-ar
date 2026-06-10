@@ -19,6 +19,11 @@ export function initVn(choicesEl: HTMLElement): void {
   dialogue = new DialogueBox({ getName: catNameDisplay });
   choices = new Choices(choicesEl);
   setSayImpl((text) => dialogue?.say(text));
+  if (import.meta.env.DEV) {
+    const w = window as any;
+    w.__dialogue = dialogue;  // headless probe hooks (parity with main.js)
+    w.__choices = choices;
+  }
 }
 
 export function getDialogue(): DialogueBox | null { return dialogue; }

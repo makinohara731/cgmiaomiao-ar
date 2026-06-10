@@ -6,6 +6,8 @@
  * are added in M3 (this M1 version is the motion ecology + sleep/wake + decay).
  */
 import type { CatController } from "./CatController";
+import { get } from "svelte/store";
+import { onboardActive } from "../stores/session";
 import { life, cfg, notifyLife } from "../stores/soul";
 import { personality } from "./soul/life";
 import { baseAnim } from "./clips";
@@ -39,6 +41,10 @@ export function stopBehavior(): void { clearTimeout(behaviorTimer); }
 function runBehavior(): void {
   scheduleBehavior();                         // always queue the next tick
   if (!modelReady || !controller) return;
+  // Onboarding overlay up → hold the whole ambient life (otherwise the first
+  // proactive tick silently burns the daily.intro story beat behind the
+  // z-1000 overlay — marked seen, never seen). Resumes when it closes.
+  if (get(onboardActive)) return;
 
   const now = Date.now();
   if (controller.isBusy(now)) return;         // never interrupt a move / user action

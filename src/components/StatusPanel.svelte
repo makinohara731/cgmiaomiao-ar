@@ -57,6 +57,7 @@
     <div class="sp-link-row">
       <button class="sp-cfg-link" onclick={() => openPanel.set("diary")}>日记</button>
       <button class="sp-cfg-link" onclick={() => openPanel.set("memory")}>记忆</button>
+      <button class="sp-cfg-link" onclick={() => openPanel.set("gallery")}>回廊</button>
       <button class="sp-cfg-link" onclick={() => openPanel.set("cfg")}>设置</button>
     </div>
   </div>

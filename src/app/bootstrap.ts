@@ -26,8 +26,11 @@ import { pickFrom } from "../engine/util";
 import * as audio from "../audio";
 import { bus, EVT } from "../bus";
 import { life, notifyLife } from "../stores/soul";
-import { modelReady, loaderHidden, degraded, currentClip } from "../stores/session";
+import { modelReady, loaderHidden, degraded, currentClip, onboardActive } from "../stores/session";
 import { story } from "../story/StoryEngine";
+import * as saves from "../story/saves";
+
+export const ONBOARD_KEY = "miaomiao.onboarded.v1";
 
 let renderer: CatRenderer;
 let controller: CatController;
@@ -57,6 +60,8 @@ export function start(opts: { modelViewer: HTMLElement; canvas: HTMLCanvasElemen
     const w = window as any;
     w.__r = renderer;
     w.__play = (name: string, _loop = false) => controller.play(name);
+    w.__story = story;   // headless P4/M4 checks (parity with main.js)
+    w.__saves = saves;
   }
 
   state = new CatStateMachine();
@@ -114,7 +119,11 @@ function onModelLoaded(): void {
   // eslint-disable-next-line no-console
   console.log("Model loaded. Clips:", renderer.getClips());
   loaderHidden.set(true);
-  setTimeout(doGreeting, 700);     // M4: onboarding cutscene on first visit
+  // First visit → the 4-beat onboarding cutscene; otherwise greet after 700ms.
+  // scheduleBehavior runs unconditionally either way (old-app behaviour: the
+  // ambient loop ticks behind the z-1000 overlay, invisible until it closes).
+  if (!localStorage.getItem(ONBOARD_KEY)) onboardActive.set(true);
+  else setTimeout(doGreeting, 700);
   scheduleBehavior();              // start the autonomous life loop
 }
 
@@ -132,7 +141,8 @@ function onAnimPlayed(name: string, loop: boolean): void {
   bus.emit(EVT.AnimPlayed, { name, loop });
 }
 
-function doGreeting(): void {
+/** Exported for Onboarding.svelte's already-named branch (old-app parity). */
+export function doGreeting(): void {
   if (life.asleep) {
     emote("💤"); setEyes(true);
     showStatus("喵喵在打盹… 戳一下叫醒它", 2800);

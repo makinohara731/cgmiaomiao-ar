@@ -4,6 +4,7 @@
   import { emoteGlyph, statusToast, openPanel } from "../stores/ui";
   import { isMuted } from "../stores/session";
   import { EMOTE_ART } from "../ui/emoteArt";
+  import { ICON } from "../ui/icons";
   import { feedCat } from "../engine/feed";
   import { bus, EVT } from "../bus";
   import { mountIcons } from "../ui/icons";
@@ -45,7 +46,9 @@
 
 <!-- 永远的朋友 keepsake — unlocked at 形影不离 -->
 {#if $lifeStore.unlocks.includes("photo")}
-  <div id="foreverBadge" class="forever-badge"><span class="forever-glow ic" data-icon="spark"></span><span class="forever-text">永远的朋友</span></div>
+  <!-- {@html} instead of data-icon: this mounts conditionally mid-session
+       (unlock / slot restore), after every mountIcons() pass has run. -->
+  <div id="foreverBadge" class="forever-badge"><span class="forever-glow ic">{@html ICON.spark}</span><span class="forever-text">永远的朋友</span></div>
 {/if}
 
 <!-- Side bar -->
