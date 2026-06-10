@@ -26,6 +26,19 @@ function tickFace(): void {
   faceRAF = settled ? null : requestAnimationFrame(tickFace);
 }
 
+/** Vision's gaze tracking: set the yaw target directly (image-space, not a
+ *  screen tap) with its own ease-back delay. Shares the ONE tickFace channel —
+ *  a second RAF writing setOrientation would fight this one. */
+export function faceTowardYaw(yawDeg: number, holdMs = 1600): void {
+  faceYawTarget = yawDeg;
+  clearTimeout(faceReturnTimer);
+  faceReturnTimer = window.setTimeout(() => {
+    faceYawTarget = 0; facePitchTarget = 0;
+    if (faceRAF === null) tickFace();
+  }, holdMs);
+  if (faceRAF === null) tickFace();
+}
+
 export function faceToward(clientX: number, clientY?: number): void {
   const w = window.innerWidth || 1;
   const h = window.innerHeight || 1;

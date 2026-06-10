@@ -5,9 +5,12 @@
  * grantUnlock's DOM side-effects (badge / bgm row / chip shimmer) are reactive in
  * Svelte now — components read hasUnlock + listen for EVT.BondUnlock.
  */
+import { get } from "svelte/store";
 import { life, type Stage, notifyLife } from "../../stores/soul";
+import { arMode } from "../../stores/session";
 import { story } from "../../story/StoryEngine";
 import { bus, EVT } from "../../bus";
+import { showArCaption } from "../ar-overlay";
 import * as audio from "../../audio";
 import { saveLife } from "../persistence";
 import { writeDiary } from "./diary";
@@ -57,8 +60,11 @@ export function maybeWriteDream(): void {
   if (Math.random() < 0.25) writeDiary(`🌙 ${pickFrom(DREAMS)}`, "dream");
 }
 
-/** Soul-layer notice — top toast (AR floating caption is added in M6). */
-export function soulNotice(text: string, ms = 4200): void { showStatus(text, ms); }
+/** Soul-layer notice — a floating caption beside the cat in AR, else the toast. */
+export function soulNotice(text: string, ms = 4200): void {
+  if (get(arMode)) showArCaption(text, ms);
+  else showStatus(text, ms);
+}
 
 // In-flight bond-event dialogue chain timers (cleared so a double-band cross
 // can't interleave two events' dialogue/gift).

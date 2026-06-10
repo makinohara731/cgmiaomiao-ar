@@ -25,5 +25,11 @@ export default defineConfig({
     target: "es2020",
     outDir: "dist",
     emptyOutDir: true,
+    // SMOKE=1: also build the dev AR harness so dev/ar-smoke-probe.mjs can run
+    // against `vite preview` (the mindar vendored runtime only loads on the
+    // static prod path). Never set for real production builds.
+    rollupOptions: (globalThis as any).process?.env?.SMOKE
+      ? { input: { index: "index.html", "ar-smoke": "dev/ar-smoke.html" } }
+      : undefined,
   },
 });

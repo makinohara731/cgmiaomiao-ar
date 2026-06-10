@@ -14,6 +14,7 @@
   import GalleryPanel from "../components/GalleryPanel.svelte";
   import Onboarding from "../components/Onboarding.svelte";
   import ChatPanel from "../components/ChatPanel.svelte";
+  import QrModal from "../components/QrModal.svelte";
 
   // Inject the custom line-icons into every [data-icon] once the whole tree is
   // mounted (children mount before the parent's onMount).
@@ -36,6 +37,7 @@
 <GalleryPanel />
 <Onboarding />
 <ChatPanel />
+<QrModal />
 <Loader />
 
 <style>

@@ -24,3 +24,5 @@ export const enterState = (s: string, ms: number): void => { state?.enter(s as a
 export const holdState = (ms: number): void => { state?.hold(ms); };
 export const setOrientation = (yaw: number, pitch: number): void => renderer?.setOrientation(yaw, pitch);
 export const interactionTarget = (): HTMLElement | null => renderer?.getInteractionTarget() ?? null;
+/** The live renderer instance (engine/ar.ts narrows it to ThreeCatRenderer for AR). */
+export const rendererInstance = (): CatRenderer | null => renderer;

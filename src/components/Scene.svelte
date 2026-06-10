@@ -44,7 +44,10 @@
     autoplay
     animation-name="idle"
     animation-loop
-  ></model-viewer>
+  >
+    <!-- Mobile native-AR entry (Scene Viewer / Quick Look) -->
+    <button slot="ar-button" id="arBtn" class="ar-btn">放进现实</button>
+  </model-viewer>
 
   <!-- three.js renderer canvas (desktop default). Revealed by the factory. -->
   <canvas id="catCanvas" class="renderer-hidden" bind:this={canvas}></canvas>

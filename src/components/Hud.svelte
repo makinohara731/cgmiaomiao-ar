@@ -3,12 +3,13 @@
   import { get } from "svelte/store";
   import { lifeStore, stage } from "../stores/soul";
   import { emoteGlyph, statusToast, openPanel, chatOpen } from "../stores/ui";
-  import { isMuted, isRecording } from "../stores/session";
+  import { isMuted, isRecording, arMode, camMode } from "../stores/session";
   import { EMOTE_ART } from "../ui/emoteArt";
   import { ICON } from "../ui/icons";
   import { feedCat } from "../engine/feed";
   import { stopSpeaking } from "../engine/voice";
   import { initVoiceInput } from "../engine/voice-input";
+  import { toggleCamAr, swapCamera } from "../engine/ar";
   import { showStatus } from "../engine/feedback";
   import { bus, EVT } from "../bus";
   import { mountIcons } from "../ui/icons";
@@ -64,6 +65,8 @@
 
 <!-- Side bar -->
 <div id="sideBar" class="side-bar">
+  <button id="camBtn" class="round-btn" class:active={$arMode || $camMode} title="AR互动模式" aria-label="AR互动模式" onclick={toggleCamAr}><i class="ic">{@html ($arMode || $camMode) ? ICON.close : ICON.cam}</i></button>
+  <button id="camSwapBtn" class="round-btn cam-swap-btn" title="切换前/后置镜头" aria-label="切换镜头" onclick={swapCamera}><i class="ic" data-icon="swap"></i></button>
   <button id="feedBtn" class="round-btn" title="喂食" aria-label="喂喵喵吃东西" onclick={feedCat}><i class="ic" data-icon="fish"></i></button>
   <button id="micBtn" class="round-btn" class:recording={$isRecording} title="长按说话" aria-label="语音命令" bind:this={micBtnEl}><i class="ic" data-icon="mic"></i></button>
   <button id="chatBtn" class="round-btn" title="跟猫聊天" aria-label="对话精灵" onclick={() => chatOpen.update((v) => !v)}><i class="ic" data-icon="chat"></i></button>

@@ -17,6 +17,7 @@ import { installPersistence, loadLife, loadMem, loadDiary, loadDaily, loadCfg } 
 import { initExpression, setEyes, flashExpression } from "../engine/expression";
 import { initActions } from "../engine/actions";
 import { initChat } from "../engine/chat";
+import { initAr } from "../engine/ar";
 import { setRuntime } from "../engine/runtime";
 import { installBond, applyUnlocksOnLoad } from "../engine/soul/bond";
 import { dailyRoll } from "../engine/soul/daily";
@@ -80,6 +81,7 @@ export function start(opts: { modelViewer: HTMLElement; canvas: HTMLCanvasElemen
   startTimeOfDay();
   installPersistence();
   initChat(); // offline fallback listener + body.is-offline + DEV hooks
+  initAr();   // AR hint flavor + vision source + screenPos seam + pagehide release
 
   // model-viewer drives its own load event; wire it + the cached fast path
   // (the three backend funnels through onReady). Both are idempotent.
