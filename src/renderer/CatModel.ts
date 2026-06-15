@@ -20,6 +20,12 @@ import type { FaceConfig } from "./CatRenderer";
 const FADE = 0.25; // s — cross-fade for ambient LOOPS (idle/walk/run/sleep)
 const FALLBACK_DUR = 1.2; // s — when a clip duration is unknown
 
+// Procedural idle "breathing": a sub-1% vertical sway on the centred pivot,
+// applied every frame UNDER the clip layer so the cat is never a frozen loop
+// when nothing's happening. Tiny amplitude reads as breathing, not floating.
+const BREATHE_W = 1.45;    // rad/s ≈ 0.23 Hz
+const BREATHE_AMP = 0.006; // × maxDim
+
 // Some v5/v6 "galgame" clips were authored with very small head/ear-only motion
 // — so subtle (peak movement BELOW idle's own breathing, per dev/_look.mjs) that
 // they read as static / "broken". Amplify their keyframe rotations + translations
@@ -69,6 +75,10 @@ export class CatModel {
   private readonly _centre = new THREE.Vector3();
   private _maxDim = 1;
 
+  // idle-breathing phase + the pivot's resting Y (breathing offsets from it)
+  private breatheT = 0;
+  private pivotBaseY = 0;
+
   constructor(opts: CatModelOpts = {}) {
     const base = (import.meta as any).env?.BASE_URL ?? "/";
     const src = opts.src ?? base + "character_v2.glb";
@@ -105,6 +115,12 @@ export class CatModel {
   update(dt: number): void {
     // Clamp so a backgrounded tab (huge accumulated delta) doesn't jump clips.
     this.mixer?.update(Math.min(dt, 0.1));
+    // Idle breathing — a continuous micro-sway beneath the clip layer. Writes
+    // pivot.position.y; face-toward owns pivot.rotation, so they never fight.
+    if (this.pivot) {
+      this.breatheT += dt;
+      this.pivot.position.y = this.pivotBaseY + Math.sin(this.breatheT * BREATHE_W) * this._maxDim * BREATHE_AMP;
+    }
   }
 
   // ---- clips ----
@@ -276,6 +292,7 @@ export class CatModel {
     const centre = new THREE.Box3().setFromObject(root).getCenter(new THREE.Vector3());
     const pivot = new THREE.Group();
     pivot.position.copy(centre);
+    this.pivotBaseY = centre.y; // breathing offsets from this resting height
     root.position.sub(centre);
     pivot.add(root);
     this.pivot = pivot;

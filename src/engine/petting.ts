@@ -11,10 +11,14 @@ import { flashExpression } from "./expression";
 import { play, currentClip, enterState } from "./runtime";
 import { baseAnim } from "./clips";
 import { faceToward, catScreenCenter } from "./face-toward";
+import { addAffection } from "./soul/life";
 import * as audio from "../audio";
+import * as composites from "../composites";
 import * as particles from "../particles";
 import { bus, EVT } from "../bus";
 import { pickFrom, clamp01 } from "./util";
+
+let lastJackpot = 0;
 
 function petCat(): void {
   if (life.asleep) { wakeUp(false); audio.playMeow(); return; }
@@ -27,6 +31,23 @@ function petCat(): void {
   if (life.totalPets % 50 === 0) showStatus(`已经摸了${catNameDisplay()} ${life.totalPets} 次啦 ✨`, 2600);
 
   if (life.petStreak >= 3) {
+    // Variable-ratio jackpot: a rare, outsized payoff so petting never settles
+    // into a fully predictable response (the 1/2/3+/10+ ladder alone is too
+    // deterministic). Cooldown-gated so a long-press can't spam it.
+    if (Date.now() - lastJackpot > 20000 && Math.random() < 0.05) {
+      lastJackpot = Date.now();
+      life.petStreak = 0; // a peak moment — reset the streak after the payout
+      emote(pickFrom(["💖", "🎉", "✨"]));
+      audio.playPurrLong();
+      sayLine(pickFrom(["呜哇！被你摸得太舒服，我要跳一支舞！", "这一下太治愈了——看我表演一个！"]));
+      life.mood = clamp01(life.mood + 0.3);
+      addAffection(2);
+      notifyLife();
+      flashExpression("love", 2600);
+      particles.burst("heart", window.innerWidth / 2, window.innerHeight * 0.5, 9);
+      composites.play("dance");
+      return;
+    }
     emote(pickFrom(["❤️", "💕", "✨"]));
     if (life.petStreak >= 10) audio.playPurrLong(); else audio.playPurr();
     sayLine(pickFrom(["呼噜呼噜～最喜欢你了！", "嘿嘿，好舒服喵～", "再多摸一会儿嘛～"]));

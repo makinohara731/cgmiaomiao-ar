@@ -27,6 +27,11 @@ const EXPOSURE = 1.15; // matches model-viewer exposure
 const VIEW_AZIMUTH_DEG = 66; // azimuth around the model (was 90 = too side-on)
 const VIEW_POLAR_DEG = 85; // polar from +Y, == model-viewer camera-orbit phi
 const FIT_MARGIN = 1.6; // >1 pulls the camera back so the cat isn't cropped
+const AR_POP_MS = 360; // "landing" pop length when the AR marker is first found
+const easeOutBack = (t: number): number => {
+  const c1 = 1.70158, c3 = c1 + 1, p = t - 1;
+  return 1 + c3 * p * p * p + c1 * p * p; // overshoots slightly past 1, then settles
+};
 
 /** How to seat the cat on the tracked marker (P2.3). All tunable on real
  *  hardware — the marker frame's exact axes can't be verified headless. */
@@ -85,6 +90,8 @@ export class ThreeCatRenderer implements CatRenderer {
   private arSession: ArSession | null = null;
   private arEntering = false; // enterAR() is awaiting start() (sync re-entrancy guard)
   private arMount: THREE.Group | null = null;
+  private arMountScale = 1; // the AR mount's resting scale (opts.scale)
+  private arPopStart = -1;  // performance.now() of the landing pop, -1 = idle
   private readonly savedCamPos = new THREE.Vector3();
   private readonly savedCamQuat = new THREE.Quaternion();
 
@@ -239,6 +246,7 @@ export class ThreeCatRenderer implements CatRenderer {
     const tick = () => {
       this.rafId = requestAnimationFrame(tick);
       this.cat.update(this.clock.getDelta());
+      if (this.arPopStart >= 0) this.updateArPop();
       this.controls?.update();
       this.renderer.render(this.scene, this.camera);
     };
@@ -261,6 +269,20 @@ export class ThreeCatRenderer implements CatRenderer {
       far: this.camera.far,
       isAR: this.isAR(),
     };
+  }
+
+  /** Trigger the AR "landing" pop — the host calls this when the marker is first
+   *  found, so the cat eases onto the surface (slight overshoot) instead of
+   *  popping in flat. No-op outside AR. */
+  arLandingPop(): void {
+    if (this.arMount) this.arPopStart = performance.now();
+  }
+
+  private updateArPop(): void {
+    if (this.arPopStart < 0 || !this.arMount) return;
+    const t = (performance.now() - this.arPopStart) / AR_POP_MS;
+    if (t >= 1) { this.arMount.scale.setScalar(this.arMountScale); this.arPopStart = -1; return; }
+    this.arMount.scale.setScalar(this.arMountScale * (0.5 + 0.5 * easeOutBack(t)));
   }
 
   /**
@@ -309,6 +331,7 @@ export class ThreeCatRenderer implements CatRenderer {
       0
     );
     mount.scale.setScalar(scale);
+    this.arMountScale = scale;
     mount.position.set(0, 0, opts.lift ?? 0);
 
     // Reparent the SAME CatModel (keeps its animation/face state) into the anchor.
@@ -356,6 +379,7 @@ export class ThreeCatRenderer implements CatRenderer {
     const session = this.arSession;
     if (!session) return;
     this.arSession = null;
+    this.arPopStart = -1; // cancel any in-flight landing pop
     void session.stop();
 
     const anchor = session.anchor();

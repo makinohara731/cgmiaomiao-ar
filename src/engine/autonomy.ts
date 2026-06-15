@@ -26,6 +26,13 @@ let controller: CatController | null = null;
 let behaviorTimer: number | undefined;
 let modelReady = false;
 
+// Recently-played idle clips are briefly down-weighted so the ambient pool
+// doesn't visibly repeat the same micro-action back to back (weightedPick itself
+// is memoryless and will happily draw the same clip twice running).
+const recentClips = new Map<string, number>();
+const RECENCY_MS = 15000;
+const RECENCY_MUL = 0.2;
+
 export function initAutonomy(c: CatController): void { controller = c; }
 export function setModelReady(v: boolean): void { modelReady = v; }
 
@@ -107,11 +114,15 @@ function runBehavior(): void {
   }
   if (life.energy > 0.72) pool.push(["jump", 6 * pm.lively], ["pounce", 6 * pm.lively]);
 
-  const pick = weightedPick(pool);
+  const pick = weightedPick(pool.map(([n, w]) => {
+    const last = recentClips.get(n);
+    return [n, last && now - last < RECENCY_MS ? w * RECENCY_MUL : w] as [string, number];
+  }));
   if (pick === "nothing") {
     if (Math.random() < 0.5) emote(pickFrom(["♪", "·ω·", "～", "🌿"]));
     return;
   }
+  recentClips.set(pick, now);
   emote(EMOTE_FOR[pick] || "");
   controller.play(pick);
   if (["lookaround", "sniff", "groom"].includes(pick) && Math.random() < 0.4) audio.playChirp();

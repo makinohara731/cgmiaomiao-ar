@@ -27,6 +27,7 @@ import { setArHintFlavor, showArHint, hideArHint, hideArCaption, showArCaption }
 import { initVision, startVisionLoop, stopVisionLoop, setVisionSource } from "./vision";
 import { pickFrom } from "./util";
 import * as hints from "../hints";
+import * as particles from "../particles";
 
 // ---- query flags (NaN-safe) ----
 const arQuery = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
@@ -74,7 +75,13 @@ const modelViewerEl = (): HTMLElement | null => document.getElementById("catMode
 // small". Both call the session's nudgeScale (persisted), only while in AR, and
 // only on a backend that supports it (green-blob; MindAR omits it). ----
 let pinchDist = 0;
-function scaleToast(k: number): void { showStatus(`大小 ${k.toFixed(1)}×`, 1000); }
+function scaleToast(k: number): void {
+  // Tell the user when a pinch/wheel hit the clamp (SCALE_MIN/MAX in the session)
+  // instead of silently doing nothing.
+  if (k >= 2.98) showStatus("已经最大啦～", 1000);
+  else if (k <= 0.42) showStatus("不能再小啦～", 1000);
+  else showStatus(`大小 ${k.toFixed(1)}×`, 1000);
+}
 function onArWheel(e: WheelEvent): void {
   if (!get(arMode) || typeof arSession?.nudgeScale !== "function") return;
   e.preventDefault();
@@ -113,7 +120,16 @@ export async function enterArMode(): Promise<void> {
   if (!renderer) return;
   if (!arSession) {
     arSession = makeArSession();
-    arSession.onFound(() => { hideArHint(); emote("✨"); showStatus("找到你啦，我出来咯～", 2200); });
+    arSession.onFound(() => {
+      hideArHint(); emote("✨"); showStatus("找到你啦，我出来咯～", 2200);
+      threeRenderer()?.arLandingPop(); // ease the cat onto the surface, not flat-pop
+      // sparkle ring at the cat's seat — defer a frame so screenPos is fresh.
+      requestAnimationFrame(() => {
+        const s = arSession as GreenBlobSession;
+        const p = typeof s?.screenPos === "function" ? s.screenPos() : null;
+        if (p) particles.burst("sparkle", p.x, p.y, 8);
+      });
+    });
     arSession.onLost(() => { showArHint(); });
   }
   showStatus("正在打开摄像头喵～", 2200);
