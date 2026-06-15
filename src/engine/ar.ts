@@ -26,6 +26,7 @@ import { setScreenCenterFn } from "./face-toward";
 import { setArHintFlavor, showArHint, hideArHint, hideArCaption, showArCaption } from "./ar-overlay";
 import { initVision, startVisionLoop, stopVisionLoop, setVisionSource } from "./vision";
 import { pickFrom } from "./util";
+import * as hints from "../hints";
 
 // ---- query flags (NaN-safe) ----
 const arQuery = new URLSearchParams(typeof location !== "undefined" ? location.search : "");
@@ -69,6 +70,41 @@ const catCanvasEl = (): HTMLElement | null => document.getElementById("catCanvas
 const camFeedEl = (): HTMLVideoElement | null => document.getElementById("camFeed") as HTMLVideoElement | null;
 const modelViewerEl = (): HTMLElement | null => document.getElementById("catModel");
 
+// ---- AR live scaling (pinch / wheel): the placement-UX fix for "model too
+// small". Both call the session's nudgeScale (persisted), only while in AR, and
+// only on a backend that supports it (green-blob; MindAR omits it). ----
+let pinchDist = 0;
+function scaleToast(k: number): void { showStatus(`大小 ${k.toFixed(1)}×`, 1000); }
+function onArWheel(e: WheelEvent): void {
+  if (!get(arMode) || typeof arSession?.nudgeScale !== "function") return;
+  e.preventDefault();
+  scaleToast(arSession.nudgeScale(e.deltaY < 0 ? 1.08 : 1 / 1.08));
+}
+function onArTouchMove(e: TouchEvent): void {
+  if (!get(arMode) || e.touches.length !== 2 || typeof arSession?.nudgeScale !== "function") return;
+  e.preventDefault();
+  const dist = Math.hypot(
+    e.touches[0].clientX - e.touches[1].clientX,
+    e.touches[0].clientY - e.touches[1].clientY,
+  );
+  if (pinchDist > 0 && Math.abs(dist / pinchDist - 1) > 0.01) scaleToast(arSession.nudgeScale(dist / pinchDist));
+  pinchDist = dist;
+}
+function onArTouchEnd(e: TouchEvent): void { if (e.touches.length < 2) pinchDist = 0; }
+function installArScaleGestures(): void {
+  window.addEventListener("wheel", onArWheel, { passive: false });
+  window.addEventListener("touchmove", onArTouchMove, { passive: false });
+  window.addEventListener("touchend", onArTouchEnd);
+  window.addEventListener("touchcancel", onArTouchEnd);
+}
+function removeArScaleGestures(): void {
+  window.removeEventListener("wheel", onArWheel);
+  window.removeEventListener("touchmove", onArTouchMove);
+  window.removeEventListener("touchend", onArTouchEnd);
+  window.removeEventListener("touchcancel", onArTouchEnd);
+  pinchDist = 0;
+}
+
 // ---- real AR ----
 
 export async function enterArMode(): Promise<void> {
@@ -95,6 +131,10 @@ export async function enterArMode(): Promise<void> {
   if (v && scene && canvas) { v.classList.add("ar-feed"); scene.insertBefore(v, canvas); }
   bumpInteract();
   showArHint();
+  installArScaleGestures(); // wheel / two-finger pinch → resize the cat (persisted)
+  if (typeof arSession.nudgeScale === "function") {
+    window.setTimeout(() => { if (get(arMode)) hints.showHint("ar-resize", "嫌我太小？滚轮 / 双指捏合可以把我调大～", { anchor: "top", ttlMs: 7000 }); }, 3600);
+  }
   sayLine(useMindAr
     ? pickFrom(["把卡片对准我，我就出来啦！", "喵～对准标记卡看看！"])
     : pickFrom(["给我看一块纯绿色，我就出现啦！", "喵～拿块绿色的东西对准镜头！"]));
@@ -114,6 +154,7 @@ export function exitArMode(): void {
   }
   hideArHint();
   stopVisionLoop();
+  removeArScaleGestures();
   hideArCaption();
 }
 

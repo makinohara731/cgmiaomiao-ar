@@ -38,4 +38,12 @@ export interface ArSession {
   onFound(cb: () => void): void;
   /** Marker card left view. */
   onLost(cb: () => void): void;
+  /**
+   * Adjust a user scale multiplier applied ON TOP of the cat's base AR size —
+   * the placement-UX answer to "too small" (pinch on touch, wheel on desktop).
+   * `factor` multiplies the current multiplier (>1 bigger, <1 smaller); the
+   * backend clamps + persists it and returns the new effective multiplier so the
+   * host can show feedback. Optional: a backend with no tunable size omits it.
+   */
+  nudgeScale?(factor: number): number;
 }

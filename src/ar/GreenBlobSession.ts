@@ -60,6 +60,19 @@ export interface GreenBlobSessionOpts {
 const NEAR = 0.05;
 const FAR = 1000;
 
+// User scale multiplier (pinch/wheel in AR) on top of baseScale — persisted so a
+// "make the cat bigger" only has to happen once. Clamped to a sane range.
+const AR_SCALE_KEY = "miaomiao.arscale.v1";
+const SCALE_MIN = 0.4;
+const SCALE_MAX = 3.0;
+const clampScale = (k: number): number => Math.max(SCALE_MIN, Math.min(SCALE_MAX, k));
+function readUserScale(): number {
+  try {
+    const v = parseFloat(localStorage.getItem(AR_SCALE_KEY) ?? "");
+    return Number.isFinite(v) ? clampScale(v) : 1;
+  } catch { return 1; }
+}
+
 export class GreenBlobSession implements ArSession {
   private readonly _anchor = new THREE.Group();
   private readonly _video: HTMLVideoElement;
@@ -91,6 +104,7 @@ export class GreenBlobSession implements ArSession {
   private readonly fovDeg: number;
   private readonly depth: number;
   private readonly baseScale: number;
+  private userScale = readUserScale(); // live pinch/wheel multiplier (persisted)
   private readonly smooth: number;
   private readonly sampleWidth: number;
   private readonly foundFrames: number;
@@ -104,10 +118,11 @@ export class GreenBlobSession implements ArSession {
     this.fovDeg = opts.fovDeg ?? 50;
     this.depth = opts.depth ?? 3;
     // Fixed prominent size (the cat fills a large share of the frame height at
-    // depth 3 / fov 50), independent of how much green is detected. Bumped 1.3→2.2
-    // after the first hardware test read "too small". ?sc= multiplies it via the
-    // mount; ?bs= overrides this base directly (both live-tunable).
-    this.baseScale = opts.baseScale ?? 2.2;
+    // depth 3 / fov 50), independent of how much green is detected. Bumped
+    // 1.3→2.2→3.2 across two "too small" hardware reports. ?sc= multiplies it via
+    // the mount; ?bs= overrides this base directly; and the user can pinch/wheel
+    // it live via nudgeScale (persisted in userScale) — all stack on top.
+    this.baseScale = opts.baseScale ?? 3.2;
     this.smooth = opts.smooth ?? 0.35;
     this.sampleWidth = opts.sampleWidth ?? 192;
     this.foundFrames = opts.foundFrames ?? 2;
@@ -213,6 +228,15 @@ export class GreenBlobSession implements ArSession {
     this.lostCb = cb;
   }
 
+  /** Pinch/wheel the cat bigger/smaller (placement UX). Multiplies the persisted
+   *  user multiplier, clamps it, and returns the new value for host feedback. The
+   *  next detection frame seats the anchor at baseScale·userScale. */
+  nudgeScale(factor: number): number {
+    this.userScale = clampScale(this.userScale * factor);
+    try { localStorage.setItem(AR_SCALE_KEY, this.userScale.toFixed(3)); } catch { /* private mode */ }
+    return this.userScale;
+  }
+
   // ---- internals ----
 
   private loop = (): void => {
@@ -273,7 +297,7 @@ export class GreenBlobSession implements ArSession {
     const { sx, sy } = coverToNdc(this.smU, this.smV, vw, vh, portW, portH);
     this.lastSx = sx;
     this.lastSy = sy;
-    const m = anchorMatrix(sx, sy, this.depth, this.fovDeg, portW / portH, this.baseScale);
+    const m = anchorMatrix(sx, sy, this.depth, this.fovDeg, portW / portH, this.baseScale * this.userScale);
     this._anchor.matrix.copy(this._m.fromArray(m));
     this._anchor.matrixWorldNeedsUpdate = true;
     this._anchor.visible = true;
