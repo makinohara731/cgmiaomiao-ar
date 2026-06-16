@@ -35,13 +35,22 @@ let visionTick = 0;
 let lastGestureName = "";
 let visionCooldownUntil = 0;
 
-const GESTURE_REACTION: Record<string, { anim: string; emote: string; line: string; aff?: number }> = {
-  Open_Palm: { anim: "wave", emote: "👋", line: "你好呀～我也跟你招手！" },
-  Thumb_Up: { anim: "happy", emote: "❤️", line: "嘿嘿，被你夸啦，好开心！", aff: 2 },
-  Victory: { anim: "twirl", emote: "✨", line: "耶～看我转个圈圈！", aff: 1 },
-  Closed_Fist: { anim: "jump", emote: "⤴️", line: "出拳？那我蹦一个给你看！" },
-  Pointing_Up: { anim: "lookaround", emote: "❓", line: "嗯？那边有什么吗喵～" },
-  ILoveYou: { anim: "happy", emote: "❤️", line: "我也最爱你啦！呼噜呼噜～", aff: 3 },
+interface GestureReaction { anim: string; emote: string; line: string; label: string; aff?: number; fx?: string }
+
+const GESTURE_REACTION: Record<string, GestureReaction> = {
+  // ---- 7 canonical MediaPipe gestures (trained model — the reliable backbone) ----
+  Open_Palm:   { anim: "wave",       emote: "👋", label: "张手 → 招手",   line: "你好呀～我也跟你招手！" },
+  Thumb_Up:    { anim: "happy",      emote: "👍", label: "点赞 → 开心",   line: "嘿嘿，被你夸啦，好开心！", aff: 2, fx: "happy" },
+  Victory:     { anim: "spin",       emote: "✌️", label: "剪刀手 → 转圈", line: "耶～看我转个圈圈！", aff: 1 },
+  Closed_Fist: { anim: "pounce",     emote: "✊", label: "握拳 → 猛扑",   line: "出拳？那我扑一个给你看！" },
+  Pointing_Up: { anim: "lookaround", emote: "☝️", label: "指上 → 张望",   line: "嗯？那边有什么吗喵～" },
+  ILoveYou:    { anim: "adore",      emote: "❤️", label: "我爱你 → 撒娇", line: "我也最爱你啦！呼噜呼噜～", aff: 3, fx: "love" },
+  Thumb_Down:  { anim: "shy",        emote: "🥺", label: "点踩 → 委屈",   line: "唔…被你嫌弃了，有点委屈喵…", fx: "blush" },
+  // ---- custom landmark-geometry gestures (richer vocab; tune thresholds on real hw) ----
+  OK:          { anim: "nod",        emote: "👌", label: "OK → 点头",     line: "好嘞，没问题喵！", fx: "happy" },
+  Rock:        { anim: "backflip",   emote: "🤘", label: "摇滚 → 后空翻", line: "燃起来——看我后空翻！", aff: 1 },
+  Three:       { anim: "jump",       emote: "✨", label: "三指 → 跳跃",   line: "三！蹦一个给你看！" },
+  Shaka:       { anim: "playbow",    emote: "🤙", label: "打电话手势 → 邀玩", line: "一起玩嘛～我趴下邀请你！" },
 };
 
 export async function initVision(): Promise<void> {
@@ -126,16 +135,13 @@ export function stopVisionLoop(): void {
 }
 
 function handleGestures(result: any): void {
-  if (!result || !result.gestures || !result.gestures.length) {
-    lastGestureName = "";
-    return;
-  }
-  const top = result.gestures[0][0];
-  if (!top || top.categoryName === "None" || top.score < 0.55) {
-    lastGestureName = "";
-    return;
-  }
-  const name = top.categoryName;
+  if (!result) { lastGestureName = ""; return; }
+  // Prefer the trained recognizer; when it says "None"/low-confidence, fall back
+  // to geometry-derived gestures so the vocabulary is richer than MediaPipe's 7.
+  const top = result.gestures?.[0]?.[0];
+  let name = top && top.categoryName !== "None" && top.score >= 0.55 ? top.categoryName : "";
+  if (!name) name = customGesture(result.landmarks?.[0]);
+  if (!name) { lastGestureName = ""; return; }
   if (name === lastGestureName) return; // same gesture still held
   lastGestureName = name;
   if (Date.now() < visionCooldownUntil) return;
@@ -147,7 +153,34 @@ function handleGestures(result: any): void {
   if (r.aff) addAffection(r.aff);
   emote(r.emote);
   play(r.anim);
+  if (r.fx) flashExpression(r.fx, 2200);
+  showStatus(r.label, 1800); // demo-legible "手势 → 动作" caption
   sayLine(r.line);
+}
+
+/** Which fingers are extended, from the 21 hand landmarks (MediaPipe order). A
+ *  finger is "up" when its tip sits above its PIP joint (image y grows downward);
+ *  the thumb extends sideways, so it's judged by x-spread from the index MCP. */
+function fingersUp(lm: any[]): { thumb: boolean; index: boolean; middle: boolean; ring: boolean; pinky: boolean } {
+  const up = (tip: number, pip: number): boolean => lm[tip].y < lm[pip].y - 0.02;
+  return {
+    thumb: Math.abs(lm[4].x - lm[5].x) > 0.10,
+    index: up(8, 6), middle: up(12, 10), ring: up(16, 14), pinky: up(20, 18),
+  };
+}
+const lmDist = (a: any, b: any): number => Math.hypot(a.x - b.x, a.y - b.y);
+
+/** Geometry-derived gestures, only consulted when the trained recognizer is
+ *  silent. Returns a GESTURE_REACTION key or "". Conservative shapes — the exact
+ *  thresholds want real-hardware tuning. */
+function customGesture(lm: any[] | undefined): string {
+  if (!lm || lm.length < 21) return "";
+  const f = fingersUp(lm);
+  if (lmDist(lm[4], lm[8]) < 0.05 && f.middle && f.ring && f.pinky) return "OK";   // 👌 thumb+index pinch, others up
+  if (f.index && f.pinky && !f.middle && !f.ring) return "Rock";                    // 🤘 horns
+  if (f.thumb && f.pinky && !f.index && !f.middle && !f.ring) return "Shaka";       // 🤙 thumb+pinky out
+  if (f.index && f.middle && f.ring && !f.pinky) return "Three";                    // ✋ three fingers (≠ Victory/Open)
+  return "";
 }
 
 function handleFace(result: any): void {
