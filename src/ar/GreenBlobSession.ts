@@ -118,11 +118,13 @@ export class GreenBlobSession implements ArSession {
     this.fovDeg = opts.fovDeg ?? 50;
     this.depth = opts.depth ?? 3;
     // Fixed prominent size (the cat fills a large share of the frame height at
-    // depth 3 / fov 50), independent of how much green is detected. Bumped
-    // 1.3→2.2→3.2 across two "too small" hardware reports. ?sc= multiplies it via
-    // the mount; ?bs= overrides this base directly; and the user can pinch/wheel
-    // it live via nudgeScale (persisted in userScale) — all stack on top.
-    this.baseScale = opts.baseScale ?? 3.2;
+    // depth 3 / fov 50), independent of how much green is detected. Calibrated
+    // 1.3→2.2→9.0 from a real-hardware PHOTO: at 2.2 the cat read ≈12% of screen
+    // height, so 9.0 lands it around ~45% ("a pet sitting on the surface"). NOTE:
+    // the GLB is tiny in model units and Draco accessor min/max under-report it
+    // ~15×, so the old "~1.9 units tall" doc figure is wrong — trust the photo,
+    // not the geometry math. ?sc= / ?bs= / the live pinch-wheel userScale stack.
+    this.baseScale = opts.baseScale ?? 9.0;
     this.smooth = opts.smooth ?? 0.35;
     this.sampleWidth = opts.sampleWidth ?? 192;
     this.foundFrames = opts.foundFrames ?? 2;
