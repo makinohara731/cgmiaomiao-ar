@@ -19,6 +19,12 @@ export interface Caps {
    * Quick Look AR; the desktop AR path is MindAR on three.js (P2.3).
    */
   mobile: boolean;
+  /**
+   * iPad specifically (vs phone). iPad has a REAR camera and a big screen, so it
+   * gets the three.js green-block AR (the rich desktop experience) instead of
+   * phone Quick Look. iPhone/Android phones stay model-viewer.
+   */
+  iPad: boolean;
   /** `navigator.mediaDevices.getUserMedia` exists — a camera can be requested. */
   camera: boolean;
   /** Secure context (https / localhost) — required for getUserMedia. */
@@ -50,6 +56,18 @@ function detectMobile(): boolean {
   }
 }
 
+function detectIPad(): boolean {
+  try {
+    const ua = navigator.userAgent || "";
+    if (/iPhone|iPod/i.test(ua)) return false; // phones stay model-viewer
+    // iPadOS 13+ Safari ships a desktop Mac UA but still exposes touch points;
+    // older / "request mobile" iPads keep "iPad" in the UA.
+    return /iPad/i.test(ua) || (/Macintosh/i.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+  } catch {
+    return false;
+  }
+}
+
 function detectCamera(): boolean {
   try {
     return typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
@@ -70,6 +88,7 @@ export function detectCaps(): Caps {
   return {
     webgl: detectWebGL(),
     mobile: detectMobile(),
+    iPad: detectIPad(),
     camera: detectCamera(),
     secureContext: detectSecure(),
   };
@@ -102,5 +121,8 @@ export function chooseBackend(caps: Caps = detectCaps()): Backend {
   // future MindAR AR path). Mobile keeps model-viewer for native Scene Viewer /
   // Quick Look AR. No WebGL → model-viewer fallback. Override via ?renderer=.
   if (!caps.webgl) return "model-viewer";
+  // iPad has a rear camera + big screen → give it the three.js green-block AR
+  // (size/breathing/pinch/gestures), not phone Quick Look. (Phones: mobile→mv.)
+  if (caps.iPad) return "three";
   return caps.mobile ? "model-viewer" : "three";
 }
